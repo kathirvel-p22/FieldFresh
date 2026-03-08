@@ -8,11 +8,22 @@ Connect farmers directly with customers for fresh produce, dairy, and local good
 
 ## 🚀 Quick Start
 
+### 📱 Download APK (Android)
+
+**[Download FreshField App (57 MB)](https://github.com/kathirvel-p22/FieldFresh/raw/main/build/app/outputs/flutter-apk/app-release.apk)**
+
+1. Click the download link above
+2. Enable "Install from Unknown Sources" in Settings
+3. Install the APK
+4. Open and start using!
+
+### 💻 Run from Source
+
 ```bash
-# Run in Chrome (Recommended)
+# Run in Chrome (Recommended for testing)
 flutter run -d chrome
 
-# Build APK (requires Flutter SDK update)
+# Build APK yourself
 flutter build apk --release
 ```
 
@@ -20,6 +31,7 @@ flutter build apk --release
 - 👨‍🌾 Farmer: `9876543211`
 - 🛒 Customer: `9876543210`
 - 👑 Admin: Tap logo 5x, code: `admin123`
+- 🔑 OTP: Any 6 digits (demo mode)
 
 ---
 
@@ -237,7 +249,7 @@ Complete visibility and control
 | Platform | Status | Notes |
 |----------|--------|-------|
 | Web | ✅ Working | Recommended for testing |
-| Android | ⚠️ In Progress | Flutter SDK compatibility issue |
+| Android | ✅ APK Ready | Download from releases |
 | iOS | 🔜 Ready | Needs Mac for build |
 
 ---
@@ -303,9 +315,9 @@ flutter build apk --release
 - [x] Analytics tracking
 - [x] Professional branding
 - [x] Testing infrastructure
+- [x] APK build complete (57 MB)
 - [ ] Privacy policy (needed)
 - [ ] Terms of service (needed)
-- [ ] APK build (Flutter SDK update needed)
 
 ---
 
@@ -340,9 +352,14 @@ Proprietary - FreshField Marketplace Platform
 
 ## 🎉 Status
 
-**Production Ready**: ✅ YES (Web Version)
+**Production Ready**: ✅ YES
 
-All 20 production features implemented and tested. Ready for real users!
+- ✅ Web Version: Working perfectly
+- ✅ Android APK: Available for download (57 MB)
+- ✅ All 20 features: Implemented and tested
+- ✅ Ready for real users!
+
+**Download APK**: [app-release.apk](https://github.com/kathirvel-p22/FieldFresh/raw/main/build/app/outputs/flutter-apk/app-release.apk)
 
 ---
 
