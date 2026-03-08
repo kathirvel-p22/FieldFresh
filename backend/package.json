@@ -1,0 +1,25 @@
+{
+  "name": "fieldfresh-backend",
+  "version": "1.0.0",
+  "description": "FieldFresh Backend API — Notification Engine + Payment Webhooks",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "@supabase/supabase-js": "^2.39.3",
+    "firebase-admin": "^12.0.0",
+    "razorpay": "^2.9.2",
+    "axios": "^1.6.7",
+    "express-rate-limit": "^7.1.5",
+    "helmet": "^7.1.0",
+    "morgan": "^1.10.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.3"
+  }
+}

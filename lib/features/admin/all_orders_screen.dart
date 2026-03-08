@@ -1,0 +1,496 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import '../../core/constants.dart';
+import '../../services/supabase_service.dart';
+
+class AllOrdersScreen extends StatefulWidget {
+  const AllOrdersScreen({super.key});
+  @override
+  State<AllOrdersScreen> createState() => _AllOrdersScreenState();
+}
+
+class _AllOrdersScreenState extends State<AllOrdersScreen> {
+  List<Map<String, dynamic>> _orders = [];
+  bool _loading = true;
+  String _filterStatus = 'all';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrders();
+  }
+
+  Future<void> _loadOrders() async {
+    setState(() => _loading = true);
+    try {
+      final data = await SupabaseService.getAllOrders();
+      setState(() {
+        _orders = data;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() => _loading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  List<Map<String, dynamic>> get _filteredOrders {
+    if (_filterStatus == 'all') return _orders;
+    return _orders.where((o) => o['status'] == _filterStatus).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('All Orders'),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await SupabaseService.signOut();
+              if (context.mounted) context.go(AppRoutes.roleSelect);
+            },
+          ),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(50),
+          child: Container(
+            color: Colors.white,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  _FilterChip('All', 'all'),
+                  _FilterChip('Pending', 'pending'),
+                  _FilterChip('Confirmed', 'confirmed'),
+                  _FilterChip('Packed', 'packed'),
+                  _FilterChip('Dispatched', 'dispatched'),
+                  _FilterChip('Delivered', 'delivered'),
+                  _FilterChip('Cancelled', 'cancelled'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _loadOrders,
+              child: _filteredOrders.isEmpty
+                  ? const Center(child: Text('No orders found'))
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _filteredOrders.length,
+                      itemBuilder: (context, index) {
+                        final order = _filteredOrders[index];
+                        return _OrderCard(
+                          order: order,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => OrderDetailScreen(
+                                  orderId: order['id'],
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+            ),
+    );
+  }
+
+  Widget _FilterChip(String label, String value) {
+    final isSelected = _filterStatus == value;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: FilterChip(
+        label: Text(label),
+        selected: isSelected,
+        onSelected: (selected) {
+          setState(() => _filterStatus = value);
+        },
+        backgroundColor: Colors.grey[200],
+        selectedColor: AppColors.primary.withValues(alpha: 0.2),
+        checkmarkColor: AppColors.primary,
+      ),
+    );
+  }
+}
+
+class _OrderCard extends StatelessWidget {
+  final Map<String, dynamic> order;
+  final VoidCallback onTap;
+  const _OrderCard({required this.order, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final status = order['status'] as String? ?? 'pending';
+    final statusColors = {
+      'pending': AppColors.warning,
+      'confirmed': AppColors.primary,
+      'packed': AppColors.info,
+      'dispatched': AppColors.accent,
+      'delivered': AppColors.success,
+      'cancelled': AppColors.error,
+    };
+    final color = statusColors[status] ?? AppColors.textSecondary;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Order #${order['id'].toString().substring(0, 8)}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      status.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: color,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Icon(Icons.person,
+                      size: 16, color: AppColors.textSecondary),
+                  const SizedBox(width: 4),
+                  Text(
+                    order['users']?['name'] ?? 'Unknown Customer',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  const Icon(Icons.inventory_2,
+                      size: 16, color: AppColors.textSecondary),
+                  const SizedBox(width: 4),
+                  Text(
+                    order['products']?['name'] ?? 'Product',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        order['payment_status'] == 'paid'
+                            ? Icons.check_circle
+                            : Icons.pending,
+                        size: 16,
+                        color: order['payment_status'] == 'paid'
+                            ? AppColors.success
+                            : AppColors.warning,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        order['payment_status'] ?? 'pending',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: order['payment_status'] == 'paid'
+                              ? AppColors.success
+                              : AppColors.warning,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    '₹${order['total_amount']}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                      color: AppColors.success,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class OrderDetailScreen extends StatefulWidget {
+  final String orderId;
+  const OrderDetailScreen({super.key, required this.orderId});
+  @override
+  State<OrderDetailScreen> createState() => _OrderDetailScreenState();
+}
+
+class _OrderDetailScreenState extends State<OrderDetailScreen> {
+  Map<String, dynamic>? _order;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrder();
+  }
+
+  Future<void> _loadOrder() async {
+    setState(() => _loading = true);
+    try {
+      final data = await SupabaseService.getOrderDetails(widget.orderId);
+      setState(() {
+        _order = data;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _updateStatus(String newStatus) async {
+    try {
+      await SupabaseService.updateOrderStatus(widget.orderId, newStatus);
+      await _loadOrder();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Order status updated to $newStatus')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Order #${widget.orderId.substring(0, 8)}'),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Order Status Timeline
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Order Status',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          _StatusTimeline(
+                            currentStatus: _order?['status'] ?? 'pending',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Order Details
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Order Details',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          _DetailRow('Product', _order?['product_name'] ?? ''),
+                          _DetailRow('Quantity',
+                              '${_order?['quantity']} ${_order?['unit']}'),
+                          _DetailRow('Price',
+                              '₹${_order?['price_per_unit']}/${_order?['unit']}'),
+                          _DetailRow(
+                              'Total Amount', '₹${_order?['total_amount']}'),
+                          _DetailRow('Payment',
+                              _order?['payment_status'] ?? 'pending'),
+                          _DetailRow('Delivery Type',
+                              _order?['delivery_type'] ?? 'delivery'),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Update Status
+                  const Text(
+                    'Update Order Status',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _StatusButton('Confirmed', 'confirmed'),
+                      _StatusButton('Packed', 'packed'),
+                      _StatusButton('Dispatched', 'dispatched'),
+                      _StatusButton('Delivered', 'delivered'),
+                      _StatusButton('Cancelled', 'cancelled'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _StatusButton(String label, String status) {
+    return ElevatedButton(
+      onPressed: () => _updateStatus(status),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+      ),
+      child: Text(label),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  final String label, value;
+  const _DetailRow(this.label, this.value);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(color: AppColors.textSecondary),
+          ),
+          Text(
+            value,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusTimeline extends StatelessWidget {
+  final String currentStatus;
+  const _StatusTimeline({required this.currentStatus});
+
+  @override
+  Widget build(BuildContext context) {
+    final statuses = [
+      'pending',
+      'confirmed',
+      'packed',
+      'dispatched',
+      'delivered'
+    ];
+    final currentIndex = statuses.indexOf(currentStatus);
+
+    return Column(
+      children: List.generate(statuses.length, (index) {
+        final status = statuses[index];
+        final isCompleted = index <= currentIndex;
+        final isLast = index == statuses.length - 1;
+
+        return Row(
+          children: [
+            Column(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: isCompleted ? AppColors.success : Colors.grey[300],
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    isCompleted ? Icons.check : Icons.circle,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                ),
+                if (!isLast)
+                  Container(
+                    width: 2,
+                    height: 40,
+                    color: isCompleted ? AppColors.success : Colors.grey[300],
+                  ),
+              ],
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                status.toUpperCase(),
+                style: TextStyle(
+                  fontWeight: isCompleted ? FontWeight.bold : FontWeight.normal,
+                  color:
+                      isCompleted ? AppColors.success : AppColors.textSecondary,
+                ),
+              ),
+            ),
+          ],
+        );
+      }),
+    );
+  }
+}
