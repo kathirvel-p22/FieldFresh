@@ -401,7 +401,7 @@ class RealtimeService {
         return {
           'user_id': customer['id'],
           'title': 'Price Drop Alert! 💰',
-          'message': '$productName now ₹$newPrice/$unit (${discount}% off)',
+          'message': '$productName now ₹$newPrice/$unit ($discount% off)',
           'type': 'price_drop',
           'data': {'product_id': productId},
           'is_read': false,

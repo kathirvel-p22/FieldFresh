@@ -147,6 +147,13 @@ class _OrderCard extends StatelessWidget {
     };
     final color = statusColors[status] ?? AppColors.textSecondary;
 
+    // Extract customer, farmer, and product info
+    final customerName = order['users']?['name'] ?? 'Unknown Customer';
+    final productName = order['products']?['name'] ?? 'Product';
+    final farmerName = order['products']?['users']?['name'] ?? 'Unknown Farmer';
+    final quantity = order['quantity'] ?? 0;
+    final unit = order['unit'] ?? 'kg';
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
@@ -186,26 +193,83 @@ class _OrderCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
+              // Customer (who ordered)
               Row(
                 children: [
                   const Icon(Icons.person,
-                      size: 16, color: AppColors.textSecondary),
+                      size: 16, color: AppColors.primary),
                   const SizedBox(width: 4),
-                  Text(
-                    order['users']?['name'] ?? 'Unknown Customer',
-                    style: const TextStyle(fontSize: 14),
+                  const Text(
+                    'Customer: ',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      customerName,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 6),
+              // Farmer (who sold)
+              Row(
+                children: [
+                  const Icon(Icons.agriculture,
+                      size: 16, color: AppColors.secondary),
+                  const SizedBox(width: 4),
+                  const Text(
+                    'Farmer: ',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      farmerName,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              // Product details
               Row(
                 children: [
                   const Icon(Icons.inventory_2,
-                      size: 16, color: AppColors.textSecondary),
+                      size: 16, color: AppColors.accent),
                   const SizedBox(width: 4),
-                  Text(
-                    order['products']?['name'] ?? 'Product',
-                    style: const TextStyle(fontSize: 14),
+                  const Text(
+                    'Product: ',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      '$productName ($quantity $unit)',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
               ),
@@ -340,6 +404,64 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
+                  // Customer Info
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.person, color: AppColors.primary),
+                              SizedBox(width: 8),
+                              Text(
+                                'Customer Details',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          _DetailRow('Name', _order?['users']?['name'] ?? 'Unknown'),
+                          _DetailRow('Phone', _order?['users']?['phone'] ?? 'N/A'),
+                          _DetailRow('Address', _order?['delivery_address'] ?? 'N/A'),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Farmer Info
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.agriculture, color: AppColors.secondary),
+                              SizedBox(width: 8),
+                              Text(
+                                'Farmer Details',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          _DetailRow('Name', _order?['products']?['users']?['name'] ?? 'Unknown'),
+                          _DetailRow('Phone', _order?['products']?['users']?['phone'] ?? 'N/A'),
+                          _DetailRow('Location', _order?['products']?['users']?['address'] ?? 'N/A'),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   // Order Details
                   Card(
                     child: Padding(
@@ -347,12 +469,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Order Details',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          const Row(
+                            children: [
+                              Icon(Icons.inventory_2, color: AppColors.accent),
+                              SizedBox(width: 8),
+                              Text(
+                                'Order Details',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 12),
                           _DetailRow('Product', _order?['product_name'] ?? ''),

@@ -13,7 +13,7 @@ class _CustomerReviewsScreenState extends State<CustomerReviewsScreen> {
   List<Map<String, dynamic>> _reviews = [];
   bool _loading = true;
   double _avgRating = 0.0;
-  Map<int, int> _ratingDistribution = {5: 0, 4: 0, 3: 0, 2: 0, 1: 0};
+  final Map<int, int> _ratingDistribution = {5: 0, 4: 0, 3: 0, 2: 0, 1: 0};
 
   @override
   void initState() {

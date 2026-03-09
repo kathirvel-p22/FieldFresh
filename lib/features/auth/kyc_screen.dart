@@ -144,9 +144,10 @@ class _KycScreenState extends State<KycScreen> {
         }
       }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text('Error: $e'), backgroundColor: AppColors.error));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }

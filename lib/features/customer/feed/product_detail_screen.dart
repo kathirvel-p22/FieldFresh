@@ -152,7 +152,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 const Spacer(),
                 Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(color: AppColors.secondary.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-                    child: Text(p.categoryIcon + ' ' + p.category, style: const TextStyle(fontSize: 12, color: AppColors.secondary, fontWeight: FontWeight.w600))),
+                    child: Text('${p.categoryIcon} ${p.category}', style: const TextStyle(fontSize: 12, color: AppColors.secondary, fontWeight: FontWeight.w600))),
               ]),
               if (p.description != null && p.description!.isNotEmpty) ...[
                 const SizedBox(height: 14),

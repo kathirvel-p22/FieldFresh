@@ -27,7 +27,7 @@ class _PremiumLoginScreenState extends State<PremiumLoginScreen>
       'emoji': '👨‍🌾',
       'title': 'Farmer Login',
       'subtitle': 'Sell your harvest, grow your business',
-      'gradient': LinearGradient(
+      'gradient': const LinearGradient(
         colors: [Color(0xFF27AE60), Color(0xFF1E8449)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
@@ -37,7 +37,7 @@ class _PremiumLoginScreenState extends State<PremiumLoginScreen>
       'emoji': '🛒',
       'title': 'Customer Login',
       'subtitle': 'Fresh from farm to your table',
-      'gradient': LinearGradient(
+      'gradient': const LinearGradient(
         colors: [Color(0xFF1B6CA8), Color(0xFF145080)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
@@ -47,7 +47,7 @@ class _PremiumLoginScreenState extends State<PremiumLoginScreen>
       'emoji': '🔐',
       'title': 'Admin Login',
       'subtitle': 'Manage the entire platform',
-      'gradient': LinearGradient(
+      'gradient': const LinearGradient(
         colors: [Color(0xFF2C3E50), Color(0xFF1A252F)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
@@ -156,9 +156,9 @@ class _PremiumLoginScreenState extends State<PremiumLoginScreen>
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
               ),
-              title: Row(
+              title: const Row(
                 children: [
-                  const Text('🎉 '),
+                  Text('🎉 '),
                   Expanded(
                     child: Text(
                       'Create New Account',
@@ -420,7 +420,7 @@ class _PremiumLoginScreenState extends State<PremiumLoginScreen>
                                     ),
                                   ),
                                   const SizedBox(height: 8),
-                                  Text(
+                                  const Text(
                                     'We\'ll send you an OTP to verify',
                                     style: TextStyle(
                                       fontSize: 14,
@@ -456,7 +456,7 @@ class _PremiumLoginScreenState extends State<PremiumLoginScreen>
                                               style: TextStyle(fontSize: 24),
                                             ),
                                             const SizedBox(width: 8),
-                                            Text(
+                                            const Text(
                                               '+91',
                                               style: TextStyle(
                                                 fontSize: 16,
@@ -485,14 +485,14 @@ class _PremiumLoginScreenState extends State<PremiumLoginScreen>
                                       ),
                                       focusedBorder: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(16),
-                                        borderSide: BorderSide(
+                                        borderSide: const BorderSide(
                                           color: AppColors.primary,
                                           width: 2,
                                         ),
                                       ),
                                       errorBorder: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(16),
-                                        borderSide: BorderSide(
+                                        borderSide: const BorderSide(
                                           color: AppColors.error,
                                           width: 2,
                                         ),
@@ -540,7 +540,7 @@ class _PremiumLoginScreenState extends State<PremiumLoginScreen>
                                   const SizedBox(height: 16),
 
                                   // Terms
-                                  Text(
+                                  const Text(
                                     'By continuing, you agree to our Terms of Service and Privacy Policy',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
@@ -567,7 +567,7 @@ class _PremiumLoginScreenState extends State<PremiumLoginScreen>
                             ),
                             child: Row(
                               children: [
-                                Icon(
+                                const Icon(
                                   Icons.info_outline,
                                   color: Colors.white,
                                   size: 20,

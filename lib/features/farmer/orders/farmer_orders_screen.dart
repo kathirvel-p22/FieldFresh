@@ -160,7 +160,7 @@ class _FarmerOrdersScreenState extends State<FarmerOrdersScreen> {
                             Text(
                               _selectedStatus == 'all'
                                   ? 'No orders yet'
-                                  : 'No ${_selectedStatus} orders',
+                                  : 'No $_selectedStatus orders',
                               style: const TextStyle(fontSize: 16),
                             ),
                             const SizedBox(height: 4),

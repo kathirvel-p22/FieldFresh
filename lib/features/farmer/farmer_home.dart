@@ -249,8 +249,9 @@ class _FarmerDashboardState extends State<_FarmerDashboard> {
                   stream: SupabaseService.listenToFarmerOrders(
                       SupabaseService.currentUserId ?? ''),
                   builder: (ctx, snap) {
-                    if (!snap.hasData)
+                    if (!snap.hasData) {
                       return const Center(child: CircularProgressIndicator());
+                    }
                     if (snap.data!.isEmpty) return _EmptyOrders();
                     return Column(
                       children: snap.data!

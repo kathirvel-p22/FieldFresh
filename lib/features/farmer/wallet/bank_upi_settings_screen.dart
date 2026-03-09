@@ -154,14 +154,14 @@ class _BankUpiSettingsScreenState extends State<BankUpiSettingsScreen> {
                           color: AppColors.info.withValues(alpha: 0.3),
                         ),
                       ),
-                      child: Row(
+                      child: const Row(
                         children: [
                           Icon(
                             Icons.info_outline,
                             color: AppColors.info,
                             size: 20,
                           ),
-                          const SizedBox(width: 12),
+                          SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               'Add your payment details to receive payouts from completed orders',
@@ -245,14 +245,14 @@ class _BankUpiSettingsScreenState extends State<BankUpiSettingsScreen> {
                           color: AppColors.success.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Row(
+                        child: const Row(
                           children: [
                             Icon(
                               Icons.check_circle,
                               color: AppColors.success,
                               size: 20,
                             ),
-                            const SizedBox(width: 8),
+                            SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 'UPI payments are instant and have 0% transaction fee',

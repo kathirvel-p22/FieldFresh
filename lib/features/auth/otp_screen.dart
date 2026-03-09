@@ -53,8 +53,10 @@ class _OtpScreenState extends State<OtpScreen> {
         context.go(_role == 'farmer' ? AppRoutes.farmerHome : AppRoutes.customerHome);
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Invalid OTP. Try again.'), backgroundColor: AppColors.error));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid OTP. Try again.'), backgroundColor: AppColors.error));
+      }
       _pinCtrl.clear();
     } finally {
       if (mounted) setState(() => _loading = false);

@@ -244,13 +244,15 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
         stream: SupabaseService.listenToCustomerOrders(SupabaseService.currentUserId ?? ''),
         builder: (_, snap) {
           if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-          if (snap.data!.isEmpty) return const Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          if (snap.data!.isEmpty) {
+            return const Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
             Text('🛒', style: TextStyle(fontSize: 64)),
             SizedBox(height: 12),
             Text('No orders yet!', style: TextStyle(fontSize: 18, color: AppColors.textSecondary)),
             SizedBox(height: 4),
             Text('Browse the market and order fresh produce', style: TextStyle(color: AppColors.textHint)),
           ]));
+          }
           final orders = snap.data!.map((d) => OrderModel.fromJson(d)).toList();
           return ListView.builder(
             padding: const EdgeInsets.all(AppSizes.paddingM),

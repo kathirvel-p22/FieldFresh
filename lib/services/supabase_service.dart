@@ -210,10 +210,12 @@ class SupabaseService {
 
   static Future<void> updateOrderStatus(String orderId, String status) async {
     final updates = <String, dynamic>{'status': status};
-    if (status == 'confirmed')
+    if (status == 'confirmed') {
       updates['confirmed_at'] = DateTime.now().toIso8601String();
-    if (status == 'delivered')
+    }
+    if (status == 'delivered') {
       updates['delivered_at'] = DateTime.now().toIso8601String();
+    }
     await _client.from('orders').update(updates).eq('id', orderId);
   }
 
@@ -454,7 +456,7 @@ class SupabaseService {
   static Future<List<Map<String, dynamic>>> getAllOrders() async {
     final data = await _client
         .from('orders')
-        .select('*, products(name), users!orders_customer_id_fkey(name)')
+        .select('*, products(name, users(name, phone, address)), users!orders_customer_id_fkey(name, phone)')
         .order('created_at', ascending: false);
     return List<Map<String, dynamic>>.from(data);
   }
@@ -470,7 +472,7 @@ class SupabaseService {
   static Future<Map<String, dynamic>?> getOrderDetails(String orderId) async {
     final data = await _client
         .from('orders')
-        .select('*')
+        .select('*, products(name, users(name, phone, address)), users!orders_customer_id_fkey(name, phone)')
         .eq('id', orderId)
         .maybeSingle();
     return data;
@@ -769,10 +771,10 @@ class SupabaseService {
     final freshnessWeight = freshnessScore / 100 * 30;
 
     // Following score (20%) - would need to check if customer follows farmer
-    final followingScore = 0.0; // TODO: Check following status
+    const followingScore = 0.0; // TODO: Check following status
 
     // Category preference (10%) - would need customer's order history
-    final categoryScore = 0.0; // TODO: Check category preference
+    const categoryScore = 0.0; // TODO: Check category preference
 
     return distanceScore + freshnessWeight + followingScore + categoryScore;
   }

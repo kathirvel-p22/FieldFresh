@@ -286,12 +286,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                   FilteringTextInputFormatter.digitsOnly,
                                   LengthLimitingTextInputFormatter(10)
                                 ],
-                                decoration: InputDecoration(
+                                decoration: const InputDecoration(
                                   labelText: 'Mobile Number',
                                   prefixText: '+91  ',
-                                  prefixStyle: const TextStyle(
+                                  prefixStyle: TextStyle(
                                       fontWeight: FontWeight.w600),
-                                  prefixIcon: const Icon(Icons.phone_outlined),
+                                  prefixIcon: Icon(Icons.phone_outlined),
                                   filled: true,
                                   fillColor: AppColors.background,
                                 ),
@@ -323,7 +323,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                                 fontWeight: FontWeight.bold)),
                                   )),
                               const SizedBox(height: 12),
-                              Text(
+                              const Text(
                                   'By continuing you agree to our Terms & Privacy Policy',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(

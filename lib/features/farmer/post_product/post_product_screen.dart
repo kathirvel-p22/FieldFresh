@@ -245,7 +245,7 @@ class _PostProductScreenState extends State<PostProductScreen> {
                           padding: const EdgeInsets.all(8),
                           itemCount: _images.length + 1,
                           itemBuilder: (_, i) {
-                            if (i == _images.length)
+                            if (i == _images.length) {
                               return GestureDetector(
                                   onTap: _showImagePickerOptions,
                                   child: Container(
@@ -260,6 +260,7 @@ class _PostProductScreenState extends State<PostProductScreen> {
                                       child: const Icon(
                                           Icons.add_photo_alternate,
                                           color: AppColors.secondary)));
+                            }
                             return Container(
                                 width: 140,
                                 margin: const EdgeInsets.only(right: 8),

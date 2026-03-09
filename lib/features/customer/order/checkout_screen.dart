@@ -401,7 +401,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               color: isSelected ? AppColors.primary : Colors.grey,
             ),
           );
-        }).toList(),
+        }),
         TextButton.icon(
           onPressed: () {
             Navigator.push(

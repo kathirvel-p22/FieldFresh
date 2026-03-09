@@ -348,9 +348,9 @@ class _AdvancedProductCardState extends State<AdvancedProductCard> {
                 : AppColors.success;
 
     String timerText;
-    if (remaining.isNegative)
+    if (remaining.isNegative) {
       timerText = 'Expired';
-    else if (remaining.inHours > 0)
+    } else if (remaining.inHours > 0)
       timerText = '${remaining.inHours}h ${remaining.inMinutes % 60}m';
     else
       timerText = '${remaining.inMinutes}m ${remaining.inSeconds % 60}s';

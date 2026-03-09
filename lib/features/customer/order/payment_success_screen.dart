@@ -83,10 +83,10 @@ class PaymentSuccessScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: AppColors.info.withValues(alpha: 0.3)),
                 ),
-                child: Row(
+                child: const Row(
                   children: [
                     Icon(Icons.info_outline, color: AppColors.info, size: 24),
-                    const SizedBox(width: 12),
+                    SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         'You can track your order in the Order History section',

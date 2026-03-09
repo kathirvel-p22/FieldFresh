@@ -29,18 +29,18 @@ class _DeliveryAddressesScreenState extends State<DeliveryAddressesScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Add New Address'),
-        content: Column(
+        content: const Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Label (Home, Office, etc.)',
                 border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             TextField(
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Full Address',
                 border: OutlineInputBorder(),
               ),

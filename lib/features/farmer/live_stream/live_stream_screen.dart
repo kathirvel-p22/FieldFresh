@@ -24,11 +24,13 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> {
       if (mounted) setState(() { _viewers += (DateTime.now().second % 3 == 0 ? 1 : -1).clamp(0, 999); });
     });
     _commentTimer = Timer.periodic(const Duration(seconds: 4), (_) {
-      if (mounted) setState(() {
+      if (mounted) {
+        setState(() {
         _comments.insert(0, _commentSamples[_commentIndex % _commentSamples.length]);
         _commentIndex++;
         if (_comments.length > 5) _comments.removeLast();
       });
+      }
     });
   }
 
