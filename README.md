@@ -71,7 +71,8 @@ flutter build apk --release
 ### 👑 Admin Dashboard
 - ✅ **Analytics** - Total farmers, customers, orders, revenue
 - ✅ **User Management** - Verify/block farmers, manage customers
-- ✅ **Order Monitoring** - View all orders, track status
+- ✅ **Enhanced Order Monitoring** - View customer, farmer, and product details for each order
+- ✅ **Order Details** - See who ordered, who sold, product info, and complete transaction history
 - ✅ **Revenue Tracking** - Platform fees, transaction history
 
 ### ⚡ Performance & Security
@@ -120,9 +121,9 @@ FreshField/
 │
 └── 👑 Admin Panel (6 tabs)
     ├── Dashboard - Key metrics
-    ├── Farmers - Manage farmers
-    ├── Customers - Manage customers
-    ├── Orders - All orders
+    ├── Farmers - Manage farmers (verify/delete)
+    ├── Customers - View customer details
+    ├── Orders - Enhanced view with customer, farmer & product details
     ├── Products - All products
     └── Revenue - Platform earnings
 ```
@@ -360,6 +361,8 @@ Proprietary - FreshField Marketplace Platform
 - ✅ Ready for real users!
 
 **Download APK**: [app-release.apk](https://github.com/kathirvel-p22/FieldFresh/raw/main/build/app/outputs/flutter-apk/app-release.apk)
+
+**Latest Update**: Enhanced admin orders screen now shows complete transaction details - customer who ordered, farmer who sold, and full product information.
 
 ---
 
