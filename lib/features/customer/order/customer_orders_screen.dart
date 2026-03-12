@@ -238,13 +238,78 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
   
   @override
   Widget build(BuildContext context) {
+    final customerId = SupabaseService.currentUserId;
+    print('DEBUG: Customer Orders - Customer ID: $customerId');
+    
+    if (customerId == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('My Orders'), backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+        body: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 64, color: Colors.red),
+              SizedBox(height: 16),
+              Text('Error: No customer ID found'),
+              Text('Please logout and login again'),
+            ],
+          ),
+        ),
+      );
+    }
+    
     return Scaffold(
       appBar: AppBar(title: const Text('My Orders'), backgroundColor: AppColors.primary, foregroundColor: Colors.white),
       body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: SupabaseService.listenToCustomerOrders(SupabaseService.currentUserId ?? ''),
+        stream: SupabaseService.listenToCustomerOrders(customerId),
         builder: (_, snap) {
-          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+          print('DEBUG: Customer Orders Stream - hasData: ${snap.hasData}, data: ${snap.data?.length}, error: ${snap.error}');
+          
+          if (snap.hasError) {
+            print('DEBUG: Customer Orders Stream Error: ${snap.error}');
+            // Use fallback method when stream fails
+            return FutureBuilder<List<OrderModel>>(
+              future: SupabaseService.getCustomerOrders(customerId),
+              builder: (context, futureSnap) {
+                if (futureSnap.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                
+                if (futureSnap.hasError) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                        const SizedBox(height: 16),
+                        const Text('Error loading orders'),
+                        const SizedBox(height: 8),
+                        Text('${futureSnap.error}', textAlign: TextAlign.center),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () {
+                            setState(() {}); // Trigger rebuild
+                          },
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                
+                final orders = futureSnap.data ?? [];
+                return _buildOrdersList(orders);
+              },
+            );
+          }
+          
+          if (!snap.hasData) {
+            print('DEBUG: Customer Orders - Still loading...');
+            return const Center(child: CircularProgressIndicator());
+          }
+          
           if (snap.data!.isEmpty) {
+            print('DEBUG: Customer Orders - No orders found');
             return const Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
             Text('🛒', style: TextStyle(fontSize: 64)),
             SizedBox(height: 12),
@@ -253,8 +318,17 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
             Text('Browse the market and order fresh produce', style: TextStyle(color: AppColors.textHint)),
           ]));
           }
+          
+          print('DEBUG: Customer Orders - Found ${snap.data!.length} orders');
           final orders = snap.data!.map((d) => OrderModel.fromJson(d)).toList();
-          return ListView.builder(
+          return _buildOrdersList(orders);
+        },
+      ),
+    );
+  }
+
+  Widget _buildOrdersList(List<OrderModel> orders) {
+    return ListView.builder(
             padding: const EdgeInsets.all(AppSizes.paddingM),
             itemCount: orders.length,
             itemBuilder: (_, i) {
@@ -403,8 +477,5 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
               );
             },
           );
-        },
-      ),
-    );
   }
 }

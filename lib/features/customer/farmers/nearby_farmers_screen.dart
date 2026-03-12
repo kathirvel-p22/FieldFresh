@@ -213,8 +213,12 @@ class _FarmerCardState extends State<FarmerCard> {
               CircleAvatar(
                 radius: 32,
                 backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                child: const Icon(Icons.person,
-                    size: 32, color: AppColors.primary),
+                backgroundImage: farmer['profile_image'] != null
+                    ? NetworkImage(farmer['profile_image'])
+                    : null,
+                child: farmer['profile_image'] == null
+                    ? const Icon(Icons.person, size: 32, color: AppColors.primary)
+                    : null,
               ),
               if (isVerified)
                 Positioned(

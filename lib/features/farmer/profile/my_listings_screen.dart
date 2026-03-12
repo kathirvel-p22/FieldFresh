@@ -22,19 +22,37 @@ class _MyListingsScreenState extends State<MyListingsScreen> {
   }
 
   Future<void> _loadProducts() async {
+    print('DEBUG: Loading products...');
     setState(() => _loading = true);
     try {
       final farmerId = SupabaseService.currentUserId;
-      if (farmerId == null) return;
+      if (farmerId == null) {
+        print('DEBUG: No farmer ID found');
+        setState(() => _loading = false);
+        return;
+      }
 
+      // Force a fresh query by adding a timestamp parameter
       final products = await SupabaseService.getFarmerProducts(farmerId);
-      setState(() {
-        _products = products;
-        _loading = false;
-      });
+      print('DEBUG: Loaded ${products.length} products from service');
+      
+      if (mounted) {
+        setState(() {
+          _products = products;
+          _loading = false;
+        });
+        print('DEBUG: UI updated with ${_products.length} products');
+        
+        // Print product names for verification
+        for (final product in _products) {
+          print('DEBUG: Product in list: ${product.name} (ID: ${product.id})');
+        }
+      }
     } catch (e) {
       print('Error loading products: $e');
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -73,15 +91,85 @@ class _MyListingsScreenState extends State<MyListingsScreen> {
 
     if (confirm == true) {
       try {
-        // Delete product logic here
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Product deleted successfully')),
+        print('DEBUG: Starting deletion process for product: $productId');
+        
+        // Find the product to delete
+        final productToDelete = _products.firstWhere(
+          (product) => product.id == productId,
+          orElse: () => throw Exception('Product not found in local list'),
         );
-        _loadProducts();
+        
+        print('DEBUG: Found product to delete: ${productToDelete.name}');
+        
+        // Show loading indicator
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Row(
+                children: [
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  ),
+                  SizedBox(width: 16),
+                  Text('Deleting product...'),
+                ],
+              ),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        
+        // Actually delete the product from database
+        await SupabaseService.deleteProduct(productId);
+        
+        print('DEBUG: Product deleted from database successfully');
+        
+        // FORCE UI UPDATE: Remove from local list immediately
+        if (mounted) {
+          setState(() {
+            _products.removeWhere((product) => product.id == productId);
+            print('DEBUG: Removed product from local list. New count: ${_products.length}');
+          });
+        }
+        
+        // Wait a moment, then force refresh from database
+        await Future.delayed(const Duration(milliseconds: 1000));
+        
+        if (mounted) {
+          print('DEBUG: Force refreshing from database...');
+          
+          // Clear the list first to force a complete refresh
+          setState(() {
+            _products.clear();
+            _loading = true;
+          });
+          
+          // Load fresh data from database
+          await _loadProducts();
+          
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Product deleted successfully'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        print('ERROR: Failed to delete product: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error deleting product: $e'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
       }
     }
   }
@@ -94,6 +182,20 @@ class _MyListingsScreenState extends State<MyListingsScreen> {
         title: const Text('My Listings'),
         backgroundColor: AppColors.secondary,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () async {
+              print('DEBUG: Manual refresh triggered');
+              setState(() {
+                _products.clear();
+                _loading = true;
+              });
+              await _loadProducts();
+            },
+            tooltip: 'Refresh',
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -147,7 +249,10 @@ class _MyListingsScreenState extends State<MyListingsScreen> {
                         ),
                       )
                     : RefreshIndicator(
-                        onRefresh: _loadProducts,
+                        onRefresh: () async {
+                          print('DEBUG: Pull-to-refresh triggered');
+                          await _loadProducts();
+                        },
                         child: ListView.builder(
                           padding: const EdgeInsets.all(16),
                           itemCount: _filteredProducts.length,

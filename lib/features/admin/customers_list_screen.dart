@@ -136,8 +136,29 @@ class _CustomersListScreenState extends State<CustomersListScreen> {
 
     if (confirmed != true) return;
 
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Text('Deleting customer...'),
+          ],
+        ),
+      ),
+    );
+
     try {
+      print('DEBUG: Attempting to delete customer: $customerId');
       await SupabaseService.deleteCustomer(customerId);
+      print('DEBUG: Customer deletion successful');
+      
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+      
       _loadCustomers();
       if (mounted) {
         showDialog(
@@ -161,6 +182,11 @@ class _CustomersListScreenState extends State<CustomersListScreen> {
         );
       }
     } catch (e) {
+      print('DEBUG: Customer deletion failed: $e');
+      
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+      
       if (mounted) {
         showDialog(
           context: context,
@@ -172,7 +198,7 @@ class _CustomersListScreenState extends State<CustomersListScreen> {
                 Text('Error'),
               ],
             ),
-            content: Text('Failed to delete: ${e.toString()}'),
+            content: Text('Failed to delete customer:\n\n${e.toString()}'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
