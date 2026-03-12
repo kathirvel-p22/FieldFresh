@@ -81,7 +81,11 @@ Connect farmers directly with customers for fresh produce, dairy, and local good
 
 ### 📱 Download APK (Android)
 
-**[Download FreshField App v2.4 (62.9 MB)](https://github.com/kathirvel-p22/FieldFresh/raw/main/build/app/outputs/flutter-apk/app-release.apk)**
+**[Download FreshField App v2.4 (62.9 MB)](https://github.com/kathirvel-p22/FieldFresh/releases/download/v2.4.0/app-release.apk)**
+
+**Alternative Download Methods**:
+- **GitHub Releases**: [v2.4.0 Release Page](https://github.com/kathirvel-p22/FieldFresh/releases/tag/v2.4.0)
+- **Build Locally**: `flutter build apk --release` (recommended for developers)
 
 **Build Details**:
 - 📦 **Size**: 62.9 MB (optimized)
@@ -489,7 +493,7 @@ Proprietary - FreshField Marketplace Platform
 - ✅ All 20 features: Implemented and tested with working image system
 - ✅ Ready for real users with complete functionality!
 
-**Download APK**: [app-release.apk v2.4](https://github.com/kathirvel-p22/FieldFresh/raw/main/build/app/outputs/flutter-apk/app-release.apk) (62.9 MB)
+**Download APK**: [app-release.apk v2.4](https://github.com/kathirvel-p22/FieldFresh/releases/download/v2.4.0/app-release.apk) (62.9 MB)
 
 **Latest Update**: **v2.4 - Complete Image Upload System & Real-time Updates** ✅ **APK READY**
 - ✅ **Working Image Uploads**: Profile photos and product images upload successfully to Supabase Storage
