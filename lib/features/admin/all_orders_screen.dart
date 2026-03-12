@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/constants.dart';
 import '../../services/supabase_service.dart';
+import '../../services/realtime_service.dart';
 
 class AllOrdersScreen extends StatefulWidget {
   const AllOrdersScreen({super.key});
@@ -13,11 +15,31 @@ class _AllOrdersScreenState extends State<AllOrdersScreen> {
   List<Map<String, dynamic>> _orders = [];
   bool _loading = true;
   String _filterStatus = 'all';
+  StreamSubscription? _ordersSubscription;
 
   @override
   void initState() {
     super.initState();
     _loadOrders();
+    _setupRealTimeSubscriptions();
+  }
+
+  void _setupRealTimeSubscriptions() {
+    // Subscribe to real-time order updates for admin
+    _ordersSubscription = RealtimeService.subscribeToAllOrders().listen((orders) {
+      if (mounted) {
+        setState(() {
+          _orders = orders;
+          _loading = false;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _ordersSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadOrders() async {

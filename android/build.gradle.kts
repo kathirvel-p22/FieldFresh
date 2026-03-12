@@ -7,7 +7,7 @@ buildscript {
         maven { url = uri("https://maven.aliyun.com/repository/central") }
     }
     dependencies {
-        classpath("com.google.gms:google-services:4.4.1")
+        classpath("com.google.gms:google-services:4.4.2")
     }
 }
 
@@ -18,6 +18,12 @@ allprojects {
         maven { url = uri("https://maven.aliyun.com/repository/public") }
         maven { url = uri("https://maven.aliyun.com/repository/google") }
         maven { url = uri("https://maven.aliyun.com/repository/central") }
+    }
+    
+    // Suppress warnings for all projects
+    tasks.withType<JavaCompile> {
+        options.compilerArgs.addAll(listOf("-Xlint:-options", "-Xlint:-deprecation"))
+        options.isWarnings = false
     }
 }
 

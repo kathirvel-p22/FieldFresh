@@ -23,12 +23,165 @@ class _CustomersListScreenState extends State<CustomersListScreen> {
     setState(() => _loading = true);
     try {
       final data = await SupabaseService.getAllCustomers();
+      print('Loaded ${data.length} customers'); // Debug log
+      for (var customer in data) {
+        print('Customer: ${customer['name']} - Role: ${customer['role']}'); // Debug log
+      }
       setState(() {
         _customers = data;
         _loading = false;
       });
     } catch (e) {
+      print('Error loading customers: $e'); // Debug log
       setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _blockCustomer(String customerId, String customerName, bool isBlocked) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(isBlocked ? 'Unblock Customer' : 'Block Customer'),
+        content: Text(
+          isBlocked 
+            ? 'Are you sure you want to unblock $customerName?\n\nThey will be able to place orders again.'
+            : 'Are you sure you want to block $customerName?\n\nThey will not be able to place new orders.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isBlocked ? AppColors.success : AppColors.warning,
+            ),
+            child: Text(isBlocked ? 'Unblock' : 'Block'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await SupabaseService.updateCustomerStatus(customerId, !isBlocked);
+      _loadCustomers();
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.check_circle, color: AppColors.success),
+                SizedBox(width: 8),
+                Text('Success'),
+              ],
+            ),
+            content: Text('Customer ${isBlocked ? 'unblocked' : 'blocked'} successfully'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.error, color: AppColors.error),
+                SizedBox(width: 8),
+                Text('Error'),
+              ],
+            ),
+            content: Text('Failed to update: ${e.toString()}'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteCustomer(String customerId, String customerName) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Customer'),
+        content: Text('Are you sure you want to delete $customerName?\n\nThis will also delete all their orders and data.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await SupabaseService.deleteCustomer(customerId);
+      _loadCustomers();
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.check_circle, color: AppColors.success),
+                SizedBox(width: 8),
+                Text('Deleted'),
+              ],
+            ),
+            content: const Text('Customer deleted successfully'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.error, color: AppColors.error),
+                SizedBox(width: 8),
+                Text('Error'),
+              ],
+            ),
+            content: Text('Failed to delete: ${e.toString()}'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
     }
   }
 
@@ -40,6 +193,10 @@ class _CustomersListScreenState extends State<CustomersListScreen> {
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadCustomers,
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
@@ -60,52 +217,16 @@ class _CustomersListScreenState extends State<CustomersListScreen> {
                       itemCount: _customers.length,
                       itemBuilder: (context, index) {
                         final customer = _customers[index];
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor:
-                                  AppColors.primary.withValues(alpha: 0.1),
-                              backgroundImage: customer['profile_image'] != null
-                                  ? NetworkImage(customer['profile_image'])
-                                  : null,
-                              child: customer['profile_image'] == null
-                                  ? const Text('🛒',
-                                      style: TextStyle(fontSize: 20))
-                                  : null,
-                            ),
-                            title: Text(
-                              customer['name'] ?? 'Unknown',
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(customer['phone'] ?? ''),
-                                const SizedBox(height: 4),
-                                Text(
-                                  customer['address'] ?? 'No address',
-                                  style: const TextStyle(fontSize: 12),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                            trailing: IconButton(
-                              icon:
-                                  const Icon(Icons.arrow_forward_ios, size: 16),
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => CustomerDetailScreen(
-                                      customerId: customer['id'],
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
+                        return _CustomerCard(
+                          customer: customer,
+                          onBlock: () => _blockCustomer(
+                            customer['id'],
+                            customer['name'] ?? 'Customer',
+                            customer['is_blocked'] ?? false,
+                          ),
+                          onDelete: () => _deleteCustomer(
+                            customer['id'],
+                            customer['name'] ?? 'Customer',
                           ),
                         );
                       },
@@ -272,6 +393,133 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                 ],
               ),
             ),
+    );
+  }
+}
+
+class _CustomerCard extends StatelessWidget {
+  final Map<String, dynamic> customer;
+  final VoidCallback onBlock;
+  final VoidCallback onDelete;
+  
+  const _CustomerCard({
+    required this.customer,
+    required this.onBlock,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isBlocked = customer['is_blocked'] ?? false;
+    
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        children: [
+          ListTile(
+            leading: CircleAvatar(
+              backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+              backgroundImage: customer['profile_image'] != null
+                  ? NetworkImage(customer['profile_image'])
+                  : null,
+              child: customer['profile_image'] == null
+                  ? const Text('🛒', style: TextStyle(fontSize: 20))
+                  : null,
+            ),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    customer['name'] ?? 'Unknown',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                if (isBlocked)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'BLOCKED',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: AppColors.error,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(customer['phone'] ?? ''),
+                const SizedBox(height: 4),
+                Text(
+                  customer['address'] ?? 'No address',
+                  style: const TextStyle(fontSize: 12),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+            trailing: IconButton(
+              icon: const Icon(Icons.arrow_forward_ios, size: 16),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CustomerDetailScreen(
+                      customerId: customer['id'],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          // Admin Actions
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onBlock,
+                    icon: Icon(
+                      isBlocked ? Icons.check_circle : Icons.block,
+                      size: 16,
+                    ),
+                    label: Text(
+                      isBlocked ? 'Unblock' : 'Block',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: isBlocked ? AppColors.success : AppColors.warning,
+                      side: BorderSide(
+                        color: isBlocked ? AppColors.success : AppColors.warning,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onDelete,
+                    icon: const Icon(Icons.delete, size: 16),
+                    label: const Text('Delete', style: TextStyle(fontSize: 12)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.error,
+                      side: const BorderSide(color: AppColors.error),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

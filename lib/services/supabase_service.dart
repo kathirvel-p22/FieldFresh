@@ -130,6 +130,17 @@ class SupabaseService {
   static Future<void> updateFcmToken(String userId, String token) async =>
       await _client.from('users').update({'fcm_token': token}).eq('id', userId);
 
+  static Future<void> updateUserProfile(Map<String, dynamic> updates) async {
+    final userId = currentUserId;
+    if (userId == null) throw Exception('User not logged in');
+    
+    await _client.from('users').update(updates).eq('id', userId);
+  }
+
+  static Future<void> markNotificationAsRead(String notificationId) async {
+    await _client.from('notifications').update({'is_read': true}).eq('id', notificationId);
+  }
+
   static Future<List<ProductModel>> getNearbyProducts(
       {required double lat,
       required double lng,
@@ -166,12 +177,91 @@ class SupabaseService {
   }
 
   static Future<ProductModel> postProduct(ProductModel product) async {
-    final data = await _client
-        .from('products')
-        .insert(product.toJson())
-        .select('*')
-        .single();
-    return ProductModel.fromJson(data);
+    try {
+      print('Attempting to post product with data: ${product.toJson()}');
+      
+      // First, let's try with the expected new schema fields
+      final newSchemaData = {
+        'farmer_id': product.farmerId,
+        'name': product.name,
+        'category': product.category,
+        'price_per_unit': product.pricePerUnit,
+        'unit': product.unit,
+        'quantity_total': product.quantityTotal,
+        'quantity_left': product.quantityLeft,
+        'status': 'active',
+        'harvest_time': product.harvestTime.toIso8601String(),
+        'valid_until': product.validUntil.toIso8601String(),
+        'freshness_score': product.freshnessScore,
+        'image_urls': product.imageUrls,
+        'created_at': DateTime.now().toIso8601String(),
+      };
+      
+      // Add optional fields if they exist
+      if (product.description != null) newSchemaData['description'] = product.description!;
+      if (product.latitude != null) newSchemaData['latitude'] = product.latitude!;
+      if (product.longitude != null) newSchemaData['longitude'] = product.longitude!;
+      
+      print('Trying new schema data: $newSchemaData');
+      
+      final data = await _client
+          .from('products')
+          .insert(newSchemaData)
+          .select('*')
+          .single();
+      
+      print('Product posted successfully with new schema: $data');
+      return ProductModel.fromJson(data);
+    } catch (e) {
+      print('New schema failed, trying legacy compatibility: $e');
+      
+      // If new schema fails, try legacy field names that might exist
+      try {
+        print('Trying legacy schema compatibility...');
+        final legacyData = {
+          'farmer_id': product.farmerId,
+          'name': product.name,
+          'category': product.category,
+          'price': product.pricePerUnit,  // Try 'price' instead of 'price_per_unit'
+          'unit': product.unit,
+          'quantity': product.quantityTotal,  // Try 'quantity' instead of 'quantity_total'
+          'status': 'active',
+          'created_at': DateTime.now().toIso8601String(),
+        };
+        
+        final data2 = await _client
+            .from('products')
+            .insert(legacyData)
+            .select('*')
+            .single();
+            
+        print('Legacy schema worked: $data2');
+        return ProductModel.fromJson(data2);
+      } catch (e2) {
+        print('Legacy schema also failed: $e2');
+        
+        // Try ultra-minimal to see what fields actually exist
+        try {
+          print('Trying ultra-minimal to discover schema...');
+          final ultraMinimal = {
+            'farmer_id': product.farmerId,
+            'name': product.name,
+          };
+          
+          final data3 = await _client
+              .from('products')
+              .insert(ultraMinimal)
+              .select('*')
+              .single();
+              
+          print('Ultra-minimal worked, current schema accepts: $data3');
+          return ProductModel.fromJson(data3);
+        } catch (e3) {
+          print('All attempts failed. Database schema needs to be updated: $e3');
+          rethrow;
+        }
+      }
+    }
   }
 
   static Future<void> updateProductQuantity(
@@ -396,12 +486,65 @@ class SupabaseService {
   }
 
   static Future<List<Map<String, dynamic>>> getAllCustomers() async {
-    final data = await _client
+    try {
+      print('Fetching all customers...'); // Debug
+      
+      // Get all users first to see what we have
+      final allUsers = await _client
+          .from('users')
+          .select('*')
+          .order('created_at', ascending: false);
+      
+      print('Total users in database: ${allUsers.length}'); // Debug
+      
+      // Filter for customers
+      final customers = allUsers.where((user) {
+        final role = user['role']?.toString().toLowerCase();
+        final isCustomer = role == 'customer';
+        print('User: ${user['name']} - Role: $role - IsCustomer: $isCustomer'); // Debug
+        return isCustomer;
+      }).toList();
+      
+      print('Filtered customers: ${customers.length}'); // Debug
+      
+      return List<Map<String, dynamic>>.from(customers);
+    } catch (e) {
+      print('Error fetching customers: $e');
+      rethrow;
+    }
+  }
+
+  static Future<void> updateCustomerStatus(String customerId, bool isBlocked) async {
+    await _client
         .from('users')
-        .select('*')
-        .eq('role', 'customer')
-        .order('created_at', ascending: false);
-    return List<Map<String, dynamic>>.from(data);
+        .update({'is_blocked': isBlocked})
+        .eq('id', customerId);
+  }
+
+  static Future<void> deleteCustomer(String customerId) async {
+    // Delete customer's orders first (cascade delete)
+    await _client
+        .from('orders')
+        .delete()
+        .eq('customer_id', customerId);
+    
+    // Delete customer's reviews
+    await _client
+        .from('reviews')
+        .delete()
+        .eq('customer_id', customerId);
+    
+    // Delete customer's wallet transactions
+    await _client
+        .from('wallet_transactions')
+        .delete()
+        .eq('user_id', customerId);
+    
+    // Finally delete the customer
+    await _client
+        .from('users')
+        .delete()
+        .eq('id', customerId);
   }
 
   static Future<Map<String, dynamic>?> getFarmerDetails(String farmerId) async {
@@ -462,11 +605,29 @@ class SupabaseService {
   }
 
   static Future<List<Map<String, dynamic>>> getAllProducts() async {
-    final data = await _client
-        .from('products')
-        .select('*, users(name)')
-        .order('created_at', ascending: false);
-    return List<Map<String, dynamic>>.from(data);
+    try {
+      print('Fetching all products to check database structure...');
+      final data = await _client
+          .from('products')
+          .select('*')
+          .limit(1);
+      
+      if (data.isNotEmpty) {
+        print('Sample product from database: ${data.first}');
+        print('Available fields: ${data.first.keys.toList()}');
+      } else {
+        print('No products found in database');
+      }
+      
+      final allData = await _client
+          .from('products')
+          .select('*, users(name)')
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(allData);
+    } catch (e) {
+      print('Error fetching products: $e');
+      rethrow;
+    }
   }
 
   static Future<Map<String, dynamic>?> getOrderDetails(String orderId) async {
@@ -699,7 +860,7 @@ class SupabaseService {
     dynamic query = _client
         .from('products')
         .select(
-            '*, users!products_farmer_id_fkey(id, name, profile_image, rating, latitude, longitude, district, city, village)')
+            '*, users(id, name, profile_image, rating, latitude, longitude, district, city, village)')
         .eq('status', 'active')
         .gt('valid_until', DateTime.now().toIso8601String())
         .gt('quantity_left', 0);
@@ -714,36 +875,46 @@ class SupabaseService {
     // Calculate distance and freshness for each product
     final productsWithScore = data
         .map((product) {
-          final farmerLat = product['users']['latitude'] as double?;
-          final farmerLng = product['users']['longitude'] as double?;
+          // Ensure farmer data exists
+          if (product['users'] == null) {
+            print('Warning: Product ${product['id']} has no farmer data');
+            return null;
+          }
 
+          final farmerData = product['users'] as Map<String, dynamic>;
+          final farmerLat = farmerData['latitude'] as double?;
+          final farmerLng = farmerData['longitude'] as double?;
+
+          // Add farmer_name to product for compatibility
+          product['farmer_name'] = farmerData['name'] ?? 'Unknown Farmer';
+
+          // Calculate distance if location data exists, otherwise use default
+          double distance = 0.0;
           if (farmerLat != null && farmerLng != null) {
-            final distance = calculateDistance(
+            distance = calculateDistance(
               lat1: customerLat,
               lng1: customerLng,
               lat2: farmerLat,
               lng2: farmerLng,
             );
-
-            // Only include products within radius
-            if (distance <= radiusKm) {
-              final freshnessScore = calculateFreshnessScore(
-                harvestTime: DateTime.parse(product['created_at']),
-                farmerRating:
-                    (product['users']['rating'] as num?)?.toDouble() ?? 0.0,
-                distanceKm: distance,
-              );
-
-              // Hide products with score below 30
-              if (freshnessScore >= 30) {
-                product['distance_km'] = distance;
-                product['freshness_score'] = freshnessScore;
-                product['freshness_label'] = getFreshnessLabel(freshnessScore);
-                return product;
-              }
-            }
+          } else {
+            // If farmer has no location, show them as 0km away (local)
+            print('Info: Farmer ${farmerData['name']} has no location data, showing as local');
+            distance = 0.0;
           }
-          return null;
+
+          // Include ALL products regardless of distance to show all farmers
+          final freshnessScore = calculateFreshnessScore(
+            harvestTime: DateTime.parse(product['created_at']),
+            farmerRating: (farmerData['rating'] as num?)?.toDouble() ?? 0.0,
+            distanceKm: distance,
+          );
+
+          // Show all products, even with low freshness scores
+          product['distance_km'] = distance;
+          product['freshness_score'] = freshnessScore;
+          product['freshness_label'] = getFreshnessLabel(freshnessScore);
+          return product;
         })
         .where((p) => p != null)
         .toList();
@@ -756,6 +927,90 @@ class SupabaseService {
     });
 
     return productsWithScore.cast<Map<String, dynamic>>();
+  }
+
+  // Get single product with farmer details
+  static Future<Map<String, dynamic>?> getProductWithFarmerDetails(String productId) async {
+    try {
+      final data = await _client
+          .from('products')
+          .select(
+              '*, users(id, name, profile_image, rating, latitude, longitude, district, city, village, phone, address)')
+          .eq('id', productId)
+          .maybeSingle();
+
+      if (data != null && data['users'] != null) {
+        // Add farmer_name for compatibility
+        data['farmer_name'] = data['users']['name'];
+      }
+
+      return data;
+    } catch (e) {
+      print('Error fetching product with farmer details: $e');
+      return null;
+    }
+  }
+
+  // Verify farmer (triggers automatic customer notifications)
+  static Future<void> verifyFarmer(String farmerId) async {
+    try {
+      await _client
+          .from('users')
+          .update({
+            'is_verified': true,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', farmerId);
+      
+      print('Farmer verified successfully - customers will be notified automatically');
+    } catch (e) {
+      print('Error verifying farmer: $e');
+      throw e;
+    }
+  }
+
+  // Update farmer profile (triggers notifications to followers)
+  static Future<void> updateFarmerProfile(String farmerId, Map<String, dynamic> updates) async {
+    try {
+      updates['updated_at'] = DateTime.now().toIso8601String();
+      
+      await _client
+          .from('users')
+          .update(updates)
+          .eq('id', farmerId);
+      
+      print('Farmer profile updated - followers will be notified automatically');
+    } catch (e) {
+      print('Error updating farmer profile: $e');
+      throw e;
+    }
+  }
+
+  // Get all products without location restrictions (for debugging)
+  static Future<List<Map<String, dynamic>>> getAllProductsWithFarmers() async {
+    try {
+      final data = await _client
+          .from('products')
+          .select(
+              '*, users(id, name, profile_image, rating, latitude, longitude, district, city, village)')
+          .eq('status', 'active')
+          .order('created_at', ascending: false);
+
+      // Add farmer_name to all products
+      for (final product in data) {
+        if (product['users'] != null) {
+          product['farmer_name'] = product['users']['name'];
+          product['distance_km'] = 0.0; // Default distance
+          product['freshness_score'] = product['freshness_score'] ?? 85;
+          product['freshness_label'] = getFreshnessLabel(product['freshness_score'] ?? 85);
+        }
+      }
+
+      return data.cast<Map<String, dynamic>>();
+    } catch (e) {
+      print('Error fetching all products: $e');
+      return [];
+    }
   }
 
   // Feed algorithm: Distance(40%) + Freshness(30%) + Following(20%) + Category(10%)

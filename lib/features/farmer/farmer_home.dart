@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/constants.dart';
 import '../../services/supabase_service.dart';
+import '../../services/realtime_service.dart';
 import 'post_product/post_product_screen.dart';
 import 'orders/farmer_orders_screen.dart';
 import 'wallet/farmer_wallet_screen.dart';
@@ -72,11 +74,137 @@ class _FarmerDashboard extends StatefulWidget {
 class _FarmerDashboardState extends State<_FarmerDashboard> {
   Map<String, dynamic> _stats = {};
   bool _loading = true;
+  StreamSubscription? _ordersSubscription;
+  StreamSubscription? _notificationsSubscription;
 
   @override
   void initState() {
     super.initState();
     _loadStats();
+    _setupRealTimeSubscriptions();
+  }
+
+  void _setupRealTimeSubscriptions() {
+    final userId = SupabaseService.currentUserId;
+    if (userId == null) return;
+
+    // Subscribe to real-time order updates
+    _ordersSubscription = RealtimeService.subscribeToFarmerOrders(userId).listen((orders) {
+      if (mounted) {
+        _updateStatsFromOrders(orders);
+        
+        // Check for new orders and show notification
+        final newOrders = orders.where((order) {
+          final createdAt = DateTime.parse(order['created_at']);
+          final fiveMinutesAgo = DateTime.now().subtract(const Duration(minutes: 5));
+          return createdAt.isAfter(fiveMinutesAgo) && order['status'] == 'pending';
+        }).toList();
+        
+        if (newOrders.isNotEmpty) {
+          _showNewOrderNotification(newOrders.first);
+        }
+      }
+    });
+
+    // Subscribe to notifications
+    _notificationsSubscription = RealtimeService.subscribeToNotifications(userId).listen((notifications) {
+      if (notifications.isNotEmpty) {
+        final latest = notifications.first;
+        if (latest['type'] == 'new_order' && !latest['is_read']) {
+          _showOrderNotificationOverlay(latest);
+        }
+      }
+    });
+  }
+
+  void _updateStatsFromOrders(List<Map<String, dynamic>> orders) {
+    final revenue = orders
+        .where((o) => o['status'] == 'delivered')
+        .fold<double>(0, (s, o) => s + ((o['total_amount'] as num).toDouble() * 0.95));
+    
+    setState(() {
+      _stats = {
+        ..._stats,
+        'totalOrders': orders.length,
+        'pendingOrders': orders.where((o) => o['status'] == 'pending').length,
+        'revenue': revenue,
+      };
+    });
+  }
+
+  void _showNewOrderNotification(Map<String, dynamic> order) {
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.shopping_bag, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'New Order: ${order['product_name']} - ₹${order['total_amount']}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: AppColors.success,
+        behavior: SnackBarBehavior.floating,
+        action: SnackBarAction(
+          label: 'VIEW',
+          textColor: Colors.white,
+          onPressed: () {
+            // Navigate to orders tab
+            if (context.mounted) {
+              // This will switch to orders tab in parent widget
+              Navigator.of(context).pop();
+              // You might need to implement a callback to parent to switch tabs
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  void _showOrderNotificationOverlay(Map<String, dynamic> notification) {
+    if (!mounted) return;
+    
+    final overlay = Overlay.of(context);
+    late OverlayEntry overlayEntry;
+    
+    overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: MediaQuery.of(context).padding.top + 10,
+        left: 16,
+        right: 16,
+        child: RealtimeNotificationWidget(
+          title: notification['title'] ?? 'New Order',
+          message: notification['message'] ?? 'You have a new order',
+          icon: Icons.shopping_bag,
+          color: AppColors.success,
+          onTap: () {
+            overlayEntry.remove();
+            SupabaseService.markNotificationAsRead(notification['id']);
+          },
+        ),
+      ),
+    );
+    
+    overlay.insert(overlayEntry);
+    
+    Timer(const Duration(seconds: 4), () {
+      if (overlayEntry.mounted) {
+        overlayEntry.remove();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _ordersSubscription?.cancel();
+    _notificationsSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadStats() async {

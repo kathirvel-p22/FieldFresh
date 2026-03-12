@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:io';
 import '../../../core/constants.dart';
 import '../../../services/supabase_service.dart';
+import '../../../services/image_service.dart';
 import 'notification_preferences_screen.dart';
 import 'saved_farmers_screen.dart';
 import 'delivery_addresses_screen.dart';
@@ -17,6 +19,7 @@ class CustomerProfileScreen extends StatefulWidget {
 class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
   Map<String, dynamic>? _userData;
   bool _loading = true;
+  bool _uploadingImage = false;
 
   @override
   void initState() {
@@ -41,6 +44,116 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
       print('Error loading user data: $e');
       setState(() => _loading = false);
     }
+  }
+
+  void _showProfileImageOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Update Profile Photo',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+              ListTile(
+                leading: const Icon(Icons.camera_alt, color: AppColors.primary, size: 28),
+                title: const Text('Take Photo', style: TextStyle(fontSize: 16)),
+                subtitle: const Text('Capture new profile picture'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _uploadProfileImage(fromCamera: true);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library, color: AppColors.secondary, size: 28),
+                title: const Text('Choose from Gallery', style: TextStyle(fontSize: 16)),
+                subtitle: const Text('Select existing photo'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _uploadProfileImage(fromCamera: false);
+                },
+              ),
+              if (_userData?['profile_image'] != null)
+                ListTile(
+                  leading: const Icon(Icons.delete, color: AppColors.error, size: 28),
+                  title: const Text('Remove Photo', style: TextStyle(fontSize: 16)),
+                  subtitle: const Text('Use default avatar'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _removeProfileImage();
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _uploadProfileImage({required bool fromCamera}) async {
+    setState(() => _uploadingImage = true);
+    try {
+      final File? imageFile = fromCamera 
+          ? await ImageService.pickFromCamera()
+          : await ImageService.pickFromGallery();
+      
+      if (imageFile != null) {
+        // Upload image
+        final imageUrls = await ImageService.uploadMultiple([imageFile]);
+        if (imageUrls.isNotEmpty) {
+          // Update user profile
+          await SupabaseService.updateUserProfile({
+            'profile_image': imageUrls.first,
+          });
+          
+          // Reload user data
+          await _loadUserData();
+          
+          _showSnackBar('Profile photo updated successfully!', isError: false);
+        }
+      }
+    } catch (e) {
+      print('Error uploading profile image: $e');
+      _showSnackBar('Failed to upload profile photo', isError: true);
+    } finally {
+      setState(() => _uploadingImage = false);
+    }
+  }
+
+  Future<void> _removeProfileImage() async {
+    setState(() => _uploadingImage = true);
+    try {
+      await SupabaseService.updateUserProfile({
+        'profile_image': null,
+      });
+      
+      await _loadUserData();
+      _showSnackBar('Profile photo removed', isError: false);
+    } catch (e) {
+      print('Error removing profile image: $e');
+      _showSnackBar('Failed to remove profile photo', isError: true);
+    } finally {
+      setState(() => _uploadingImage = false);
+    }
+  }
+
+  void _showSnackBar(String message, {required bool isError}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? AppColors.error : AppColors.success,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
@@ -71,19 +184,54 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
             child: SafeArea(
                 child: _loading
                     ? const Center(child: CircularProgressIndicator(color: Colors.white))
-                    : Column(
+                    : _uploadingImage
+                        ? Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const CircularProgressIndicator(color: Colors.white),
+                              const SizedBox(height: 10),
+                              const Text(
+                                'Updating profile photo...',
+                                style: TextStyle(color: Colors.white70, fontSize: 12),
+                              ),
+                            ],
+                          )
+                        : Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          profileImage != null
-                              ? CircleAvatar(
-                                  radius: 44,
-                                  backgroundColor: Colors.white24,
-                                  backgroundImage: CachedNetworkImageProvider(profileImage),
-                                )
-                              : const CircleAvatar(
-                                  radius: 44,
-                                  backgroundColor: Colors.white24,
-                                  child: Text('👤', style: TextStyle(fontSize: 40))),
+                          Stack(
+                            children: [
+                              GestureDetector(
+                                onTap: _showProfileImageOptions,
+                                child: profileImage != null
+                                    ? CircleAvatar(
+                                        radius: 44,
+                                        backgroundColor: Colors.white24,
+                                        backgroundImage: CachedNetworkImageProvider(profileImage),
+                                      )
+                                    : const CircleAvatar(
+                                        radius: 44,
+                                        backgroundColor: Colors.white24,
+                                        child: Text('👤', style: TextStyle(fontSize: 40))),
+                              ),
+                              // Camera icon for photo upload
+                              Positioned(
+                                bottom: 0,
+                                right: 0,
+                                child: GestureDetector(
+                                  onTap: _showProfileImageOptions,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.primary,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.camera_alt, color: Colors.white, size: 16),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                           const SizedBox(height: 8),
                           Text(userName,
                               style: const TextStyle(

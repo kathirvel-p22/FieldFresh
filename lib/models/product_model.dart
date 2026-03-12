@@ -87,7 +87,7 @@ class ProductModel {
       'name': name,
       'category': category,
       'description': description,
-      'price_per_unit': pricePerUnit,
+      'price_per_unit': pricePerUnit,  // Reverted back to price_per_unit
       'unit': unit,
       'quantity_total': quantityTotal,
       'quantity_left': quantityLeft,
@@ -95,7 +95,8 @@ class ProductModel {
       'harvest_time': harvestTime.toIso8601String(),
       'valid_until': validUntil.toIso8601String(),
       'freshness_score': freshnessScore,
-      'status': status
+      'status': status,
+      'created_at': createdAt.toIso8601String(),
     };
 
     // Only add latitude/longitude if they're not null

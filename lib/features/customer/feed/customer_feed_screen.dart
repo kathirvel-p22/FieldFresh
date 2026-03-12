@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants.dart';
 import '../../../services/supabase_service.dart';
 import '../../../services/cart_service.dart';
+import '../../../services/realtime_service.dart';
 import '../order/cart_screen.dart';
 
 class CustomerFeedScreen extends StatefulWidget {
@@ -22,16 +23,127 @@ class _CustomerFeedScreenState extends State<CustomerFeedScreen> {
   List<Map<String, dynamic>> _products = [];
   bool _loading = true;
   int _cartCount = 0;
+  StreamSubscription? _productsSubscription;
+  StreamSubscription? _notificationsSubscription;
 
   // Demo location (Chennai - same as product defaults)
   final double _customerLat = 13.0827;
   final double _customerLng = 80.2707;
+
+  // Alternative locations for testing (can be switched)
+  // Seoul: 37.5682, 126.9977
+  // Chennai: 13.0827, 80.2707
 
   @override
   void initState() {
     super.initState();
     _loadProducts();
     _loadCartCount();
+    _setupRealTimeSubscriptions();
+  }
+
+  void _setupRealTimeSubscriptions() {
+    // Subscribe to real-time product updates
+    _productsSubscription = RealtimeService.subscribeToNearbyProducts(
+      customerLat: _customerLat,
+      customerLng: _customerLng,
+      radiusKm: 5000, // Increased radius to include all farmers
+    ).listen((products) {
+      if (mounted) {
+        setState(() {
+          _products = products;
+          _loading = false;
+        });
+      }
+    });
+
+    // Subscribe to notifications for real-time alerts
+    final userId = SupabaseService.currentUserId;
+    if (userId != null) {
+      _notificationsSubscription = RealtimeService.subscribeToNotifications(userId).listen((notifications) {
+        // Show latest notification as overlay if it's unread
+        if (notifications.isNotEmpty) {
+          final latest = notifications.first;
+          final notificationType = latest['type'];
+          
+          // Show overlay for important notification types
+          if (!latest['is_read'] && 
+              ['harvest_blast', 'new_farmer', 'farmer_update'].contains(notificationType)) {
+            _showHarvestBlastNotification(latest);
+          }
+        }
+      });
+    }
+  }
+
+  void _showHarvestBlastNotification(Map<String, dynamic> notification) {
+    if (!mounted) return;
+    
+    // Show overlay notification
+    final overlay = Overlay.of(context);
+    late OverlayEntry overlayEntry;
+    
+    // Choose icon and color based on notification type
+    IconData notificationIcon = Icons.agriculture;
+    Color notificationColor = AppColors.secondary;
+    
+    switch (notification['type']) {
+      case 'new_farmer':
+        notificationIcon = Icons.person_add;
+        notificationColor = AppColors.primary;
+        break;
+      case 'harvest_blast':
+        notificationIcon = Icons.agriculture;
+        notificationColor = AppColors.secondary;
+        break;
+      case 'farmer_update':
+        notificationIcon = Icons.update;
+        notificationColor = AppColors.warning;
+        break;
+      default:
+        notificationIcon = Icons.notifications;
+        notificationColor = AppColors.primary;
+    }
+    
+    overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: MediaQuery.of(context).padding.top + 10,
+        left: 16,
+        right: 16,
+        child: RealtimeNotificationWidget(
+          title: notification['title'] ?? 'New Notification',
+          message: notification['message'] ?? 'You have a new update',
+          icon: notificationIcon,
+          color: notificationColor,
+          onTap: () {
+            overlayEntry.remove();
+            // Mark notification as read
+            SupabaseService.markNotificationAsRead(notification['id']);
+            
+            // Handle different notification types
+            final notificationType = notification['type'];
+            final data = notification['data'];
+            
+            if (notificationType == 'new_farmer' && data?['farmer_id'] != null) {
+              // Navigate to farmer profile or refresh farmers list
+              _loadProducts(); // Refresh to show new farmer's products
+            } else if (notificationType == 'harvest_blast' && data?['product_id'] != null) {
+              // Navigate to product
+              context.go('/customer/product/${data['product_id']}');
+            }
+          },
+        ),
+      ),
+    );
+    
+    overlay.insert(overlayEntry);
+    
+    // Auto-dismiss after 5 seconds
+    Timer(const Duration(seconds: 5), () {
+      if (overlayEntry.mounted) {
+        overlayEntry.remove();
+      }
+    });
   }
 
   Future<void> _loadProducts() async {
@@ -40,16 +152,57 @@ class _CustomerFeedScreenState extends State<CustomerFeedScreen> {
       final products = await SupabaseService.getNearbyProductsWithScore(
         customerLat: _customerLat,
         customerLng: _customerLng,
-        radiusKm: 25,
+        radiusKm: 5000, // Increased to 5000km to include all farmers globally
         category: _selectedCategory == 'all' ? null : _selectedCategory,
       );
-      setState(() {
-        _products = products;
-        _loading = false;
-      });
+      
+      // If we get very few products, also load all products to ensure visibility
+      if (products.length < 3) {
+        print('Few products found (${products.length}), loading all products as fallback');
+        final allProducts = await SupabaseService.getAllProductsWithFarmers();
+        
+        // Filter by category if needed
+        final filteredProducts = _selectedCategory == 'all' 
+            ? allProducts 
+            : allProducts.where((p) => p['category'] == _selectedCategory).toList();
+        
+        // Combine and deduplicate
+        final combinedProducts = <String, Map<String, dynamic>>{};
+        for (final product in products) {
+          combinedProducts[product['id']] = product;
+        }
+        for (final product in filteredProducts) {
+          if (!combinedProducts.containsKey(product['id'])) {
+            combinedProducts[product['id']] = product;
+          }
+        }
+        
+        setState(() {
+          _products = combinedProducts.values.toList();
+          _loading = false;
+        });
+      } else {
+        setState(() {
+          _products = products;
+          _loading = false;
+        });
+      }
     } catch (e) {
       print('Error loading products: $e');
-      setState(() => _loading = false);
+      // Fallback to all products if location-based fails
+      try {
+        final allProducts = await SupabaseService.getAllProductsWithFarmers();
+        final filteredProducts = _selectedCategory == 'all' 
+            ? allProducts 
+            : allProducts.where((p) => p['category'] == _selectedCategory).toList();
+        setState(() {
+          _products = filteredProducts;
+          _loading = false;
+        });
+      } catch (e2) {
+        print('Error loading fallback products: $e2');
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -70,6 +223,8 @@ class _CustomerFeedScreenState extends State<CustomerFeedScreen> {
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _productsSubscription?.cancel();
+    _notificationsSubscription?.cancel();
     super.dispose();
   }
 

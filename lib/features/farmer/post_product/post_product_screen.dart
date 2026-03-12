@@ -27,8 +27,36 @@ class _PostProductScreenState extends State<PostProductScreen> {
   List<File> _images = [];
   bool _loading = false;
   double? _lat, _lng;
+  String _categorySearchQuery = '';
 
   final _units = ['kg', 'g', 'litre', 'ml', 'piece', 'dozen', 'bunch'];
+  
+  // Get appropriate units for current category
+  List<String> get _categoryUnits {
+    const agriculturalUnits = ['kg', 'g', 'litre', 'ml', 'bunch', 'dozen'];
+    const nonAgriculturalUnits = ['piece', 'dozen', 'kg', 'g'];
+    
+    const agriculturalCategories = [
+      'vegetables', 'leafy', 'fruits', 'dairy', 'grains', 'herbs', 'roots', 'flowers'
+    ];
+    
+    if (agriculturalCategories.contains(_category)) {
+      return agriculturalUnits;
+    } else {
+      return nonAgriculturalUnits;
+    }
+  }
+  
+  // Filtered categories based on search
+  List<Map<String, dynamic>> get _filteredCategories {
+    if (_categorySearchQuery.isEmpty) {
+      return ProductCategories.all;
+    }
+    return ProductCategories.all.where((cat) {
+      final name = (cat['name'] as String).toLowerCase();
+      return name.contains(_categorySearchQuery);
+    }).toList();
+  }
 
   @override
   void initState() {
@@ -47,19 +75,84 @@ class _PostProductScreenState extends State<PostProductScreen> {
 
   Future<void> _getLocation() async {
     try {
+      // Check location permission first
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      
+      if (permission == LocationPermission.deniedForever || 
+          permission == LocationPermission.denied) {
+        // Use default location (Chennai, India) if permission denied
+        setState(() {
+          _lat = 13.0827;
+          _lng = 80.2707;
+        });
+        return;
+      }
+
       final pos = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high);
       setState(() {
         _lat = pos.latitude;
         _lng = pos.longitude;
       });
-    } catch (_) {}
+    } catch (e) {
+      print('Location error: $e');
+      // Use default location if GPS fails
+      setState(() {
+        _lat = 13.0827; // Chennai, India
+        _lng = 80.2707;
+      });
+    }
   }
 
   void _onCategoryChanged(String cat) => setState(() {
         _category = cat;
         _validHours = FreshnessService.suggestValidityHours(cat);
+        
+        // Auto-suggest appropriate unit based on category
+        _unit = _getSuggestedUnit(cat);
       });
+
+  String _getSuggestedUnit(String category) {
+    const categoryUnits = {
+      // Agricultural products - weight-based
+      'vegetables': 'kg',
+      'leafy': 'kg', 
+      'fruits': 'kg',
+      'dairy': 'litre',
+      'grains': 'kg',
+      'herbs': 'bunch',
+      'roots': 'kg',
+      'flowers': 'bunch',
+      
+      // Non-agricultural products - piece-based
+      'machines': 'piece',
+      'tools': 'piece',
+      'equipment': 'piece',
+      'electronics': 'piece',
+      'gadgets': 'piece',
+      'appliances': 'piece',
+      'clothes': 'piece',
+      'accessories': 'piece',
+      'footwear': 'piece',
+      'furniture': 'piece',
+      'decor': 'piece',
+      'kitchenware': 'piece',
+      'books': 'piece',
+      'stationery': 'piece',
+      'sports': 'piece',
+      'fitness': 'piece',
+      'vehicles': 'piece',
+      'bikes': 'piece',
+      'handicrafts': 'piece',
+      'toys': 'piece',
+      'others': 'piece',
+    };
+    
+    return categoryUnits[category] ?? 'piece';
+  }
 
   Future<void> _pickImages() async {
     final imgs = await ImageService.pickMultiple();
@@ -120,22 +213,76 @@ class _PostProductScreenState extends State<PostProductScreen> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    // Check all required fields and show specific missing fields
+    List<String> missingFields = [];
+    
+    if (_nameCtrl.text.trim().isEmpty) {
+      missingFields.add('Product Name');
+    }
+    
+    if (_priceCtrl.text.trim().isEmpty) {
+      missingFields.add('Price');
+    } else {
+      final price = double.tryParse(_priceCtrl.text.trim());
+      if (price == null || price <= 0) {
+        missingFields.add('Valid Price (must be greater than 0)');
+      }
+    }
+    
+    if (_qtyCtrl.text.trim().isEmpty) {
+      missingFields.add('Available Quantity');
+    } else {
+      final qty = double.tryParse(_qtyCtrl.text.trim());
+      if (qty == null || qty <= 0) {
+        missingFields.add('Valid Quantity (must be greater than 0)');
+      }
+    }
+    
     if (_images.isEmpty) {
-      _showSnack('Please add at least one product photo', isError: true);
-      return;
+      missingFields.add('Product Photo');
     }
 
     // Check if user is logged in
     final farmerId = SupabaseService.currentUserId;
     if (farmerId == null) {
-      _showSnack('Error: User not logged in. Please login again.',
-          isError: true);
+      missingFields.add('User Login (please login again)');
+    }
+
+    // Ensure we have location coordinates
+    if (_lat == null || _lng == null) {
+      missingFields.add('Farm Location (enable GPS)');
+    }
+    
+    // Show specific missing fields
+    if (missingFields.isNotEmpty) {
+      String errorMessage = 'Missing required fields:\n';
+      for (int i = 0; i < missingFields.length; i++) {
+        errorMessage += '• ${missingFields[i]}';
+        if (i < missingFields.length - 1) errorMessage += '\n';
+      }
+      _showSnack(errorMessage, isError: true);
       return;
+    }
+
+    // Run form validation for additional checks
+    if (!_formKey.currentState!.validate()) return;
+
+    // Try to get location if missing
+    if (_lat == null || _lng == null) {
+      _showSnack('Getting location...', isError: false);
+      await _getLocation();
+      if (_lat == null || _lng == null) {
+        _showSnack('Location required. Please enable GPS and try again.', isError: true);
+        return;
+      }
     }
 
     setState(() => _loading = true);
     try {
+      // Parse numeric fields (already validated above)
+      final price = double.parse(_priceCtrl.text.trim());
+      final quantity = double.parse(_qtyCtrl.text.trim());
+
       final imageUrls = await ImageService.uploadMultiple(_images);
       final now = DateTime.now();
       final score = FreshnessService.calculateScore(
@@ -144,13 +291,13 @@ class _PostProductScreenState extends State<PostProductScreen> {
           farmerRating: 4.5,
           distanceKm: 0);
       final product = ProductModel(
-        id: '', farmerId: farmerId, name: _nameCtrl.text.trim(),
+        id: '', farmerId: farmerId!, name: _nameCtrl.text.trim(),
         category: _category,
         description:
             _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
-        pricePerUnit: double.parse(_priceCtrl.text), unit: _unit,
-        quantityTotal: double.parse(_qtyCtrl.text),
-        quantityLeft: double.parse(_qtyCtrl.text),
+        pricePerUnit: price, unit: _unit,
+        quantityTotal: quantity,
+        quantityLeft: quantity,
         imageUrls: imageUrls.isNotEmpty
             ? imageUrls
             : [
@@ -177,7 +324,29 @@ class _PostProductScreenState extends State<PostProductScreen> {
       });
       _showSnack('🌾 Harvest posted! Nearby customers notified!');
     } catch (e) {
-      _showSnack('Error: $e', isError: true);
+      print('PostgreSQL Error Details: $e'); // Debug log
+      String errorMessage = 'Error posting product';
+      
+      // Handle specific PostgreSQL errors with detailed explanations
+      if (e.toString().contains('duplicate key')) {
+        errorMessage = 'Product already exists with this name';
+      } else if (e.toString().contains('null value in column "quantity_total"')) {
+        errorMessage = 'Database Error: quantity_total field is missing.\n\nPlease run the database schema in Supabase SQL Editor first.';
+      } else if (e.toString().contains('Could not find the \'price\' column')) {
+        errorMessage = 'Database Error: price column not found.\n\nThe database schema needs to be updated. Please run SUPABASE_DATABASE_SCHEMA.sql in Supabase SQL Editor.';
+      } else if (e.toString().contains('relation "products" does not exist')) {
+        errorMessage = 'Database Error: products table not found.\n\nPlease create the database tables by running SUPABASE_DATABASE_SCHEMA.sql in Supabase SQL Editor.';
+      } else if (e.toString().contains('foreign key')) {
+        errorMessage = 'Invalid farmer ID - please logout and login again';
+      } else if (e.toString().contains('check constraint')) {
+        errorMessage = 'Invalid data values - please check all fields';
+      } else if (e.toString().contains('PGRST204')) {
+        errorMessage = 'Database Schema Error: Column not found in schema cache.\n\nPlease run the complete database schema (SUPABASE_DATABASE_SCHEMA.sql) in Supabase SQL Editor.';
+      } else {
+        errorMessage = 'Database error: ${e.toString()}\n\nIf this persists, please run SUPABASE_DATABASE_SCHEMA.sql in Supabase SQL Editor.';
+      }
+      
+      _showSnack(errorMessage, isError: true);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -185,9 +354,18 @@ class _PostProductScreenState extends State<PostProductScreen> {
 
   void _showSnack(String msg, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(msg),
+        content: Text(msg, style: const TextStyle(fontSize: 13)),
         backgroundColor: isError ? AppColors.error : AppColors.success,
-        behavior: SnackBarBehavior.floating));
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: isError ? 8 : 4), // Longer duration for errors
+        action: isError ? SnackBarAction(
+          label: 'DISMISS',
+          textColor: Colors.white,
+          onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          },
+        ) : null,
+    ));
   }
 
   @override
@@ -278,48 +456,96 @@ class _PostProductScreenState extends State<PostProductScreen> {
               const Text('Category',
                   style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
               const SizedBox(height: 8),
-              SizedBox(
-                  height: 48,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: ProductCategories.all.length,
-                    itemBuilder: (_, i) {
-                      final cat = ProductCategories.all[i];
-                      final sel = _category == cat['id'];
-                      return GestureDetector(
-                        onTap: () => _onCategoryChanged(cat['id'] as String),
-                        child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 10),
-                            decoration: BoxDecoration(
-                                color: sel
-                                    ? AppColors.secondary
-                                    : AppColors.surface,
-                                borderRadius: BorderRadius.circular(24),
-                                border: Border.all(
-                                    color: sel
-                                        ? AppColors.secondary
-                                        : Colors.grey.shade300)),
-                            child:
-                                Row(mainAxisSize: MainAxisSize.min, children: [
-                              Text(cat['icon'] as String,
-                                  style: const TextStyle(fontSize: 15)),
-                              const SizedBox(width: 4),
-                              Text(cat['name'] as String,
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      color: sel
-                                          ? Colors.white
-                                          : AppColors.textPrimary,
-                                      fontWeight: sel
-                                          ? FontWeight.w600
-                                          : FontWeight.normal)),
-                            ])),
-                      );
-                    },
-                  )),
+              
+              // Category Search
+              Container(
+                height: 40,
+                margin: const EdgeInsets.only(bottom: 8),
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Search categories...',
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      _categorySearchQuery = value.toLowerCase();
+                    });
+                  },
+                ),
+              ),
+              
+              // Category Grid
+              Container(
+                height: 140, // Increased height to accommodate text
+                child: GridView.builder(
+                  scrollDirection: Axis.horizontal,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 0.7, // Adjusted aspect ratio for better text fit
+                    crossAxisSpacing: 6,
+                    mainAxisSpacing: 6,
+                  ),
+                  itemCount: _filteredCategories.length,
+                  itemBuilder: (_, i) {
+                    final cat = _filteredCategories[i];
+                    final sel = _category == cat['id'];
+                    return GestureDetector(
+                      onTap: () => _onCategoryChanged(cat['id'] as String),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: sel ? AppColors.secondary : AppColors.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: sel ? AppColors.secondary : Colors.grey.shade300,
+                          ),
+                          boxShadow: sel ? [
+                            BoxShadow(
+                              color: AppColors.secondary.withValues(alpha: 0.3),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            )
+                          ] : null,
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              cat['icon'] as String,
+                              style: const TextStyle(fontSize: 18),
+                            ),
+                            const SizedBox(height: 2),
+                            Flexible(
+                              child: Text(
+                                cat['name'] as String,
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  color: sel ? Colors.white : AppColors.textPrimary,
+                                  fontWeight: sel ? FontWeight.w600 : FontWeight.normal,
+                                ),
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
               const SizedBox(height: 14),
 
               // ─ Name ─
@@ -346,15 +572,20 @@ class _PostProductScreenState extends State<PostProductScreen> {
                         decoration: const InputDecoration(
                             labelText: 'Price (₹) *',
                             prefixIcon: Icon(Icons.currency_rupee)),
-                        validator: (v) =>
-                            v!.trim().isEmpty ? 'Required' : null)),
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) return 'Required';
+                          final price = double.tryParse(v.trim());
+                          if (price == null) return 'Enter valid price';
+                          if (price <= 0) return 'Must be greater than 0';
+                          return null;
+                        })),
                 const SizedBox(width: 12),
                 SizedBox(
                     width: 110,
                     child: DropdownButtonFormField<String>(
-                      initialValue: _unit,
+                      value: _categoryUnits.contains(_unit) ? _unit : _categoryUnits.first,
                       decoration: const InputDecoration(labelText: 'Unit'),
-                      items: _units
+                      items: _categoryUnits
                           .map(
                               (u) => DropdownMenuItem(value: u, child: Text(u)))
                           .toList(),
@@ -376,7 +607,13 @@ class _PostProductScreenState extends State<PostProductScreen> {
                       hintText: 'e.g. 50',
                       prefixIcon: const Icon(Icons.scale_outlined),
                       suffixText: _unit),
-                  validator: (v) => v!.trim().isEmpty ? 'Required' : null),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'Required';
+                    final qty = double.tryParse(v.trim());
+                    if (qty == null) return 'Enter valid number';
+                    if (qty <= 0) return 'Must be greater than 0';
+                    return null;
+                  }),
               const SizedBox(height: 14),
 
               // ─ Validity Slider ─

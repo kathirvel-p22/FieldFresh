@@ -36,10 +36,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   Future<void> _fetchProduct() async {
     try {
-      final products = await SupabaseService.getNearbyProducts(lat: 0, lng: 0);
-      final p = products.firstWhere((p) => p.id == widget.productId, orElse: () => products.first);
-      setState(() { _product = p; _loading = false; });
-    } catch (_) { setState(() => _loading = false); }
+      final productData = await SupabaseService.getProductWithFarmerDetails(widget.productId);
+      if (productData != null) {
+        final p = ProductModel.fromJson(productData);
+        setState(() { _product = p; _loading = false; });
+      } else {
+        // Fallback to nearby products
+        final products = await SupabaseService.getNearbyProducts(lat: 0, lng: 0);
+        final p = products.firstWhere((p) => p.id == widget.productId, orElse: () => products.first);
+        setState(() { _product = p; _loading = false; });
+      }
+    } catch (e) { 
+      print('Error fetching product: $e');
+      setState(() => _loading = false); 
+    }
   }
 
   void _startTimer() {

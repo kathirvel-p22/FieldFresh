@@ -23,23 +23,61 @@ class RealtimeService {
         .stream(primaryKey: ['id'])
         .eq('status', 'active')
         .order('created_at', ascending: false)
-        .map((products) {
-          // Filter by distance and calculate scores
-          return products.where((product) {
-            final farmerLat = product['farmer_latitude'] as double?;
-            final farmerLng = product['farmer_longitude'] as double?;
+        .asyncMap((products) async {
+          // For each product, fetch farmer data and calculate distance
+          final List<Map<String, dynamic>> allProducts = [];
+          
+          for (final product in products) {
+            try {
+              // Get farmer data
+              final farmerData = await _client
+                  .from('users')
+                  .select('id, name, profile_image, rating, latitude, longitude')
+                  .eq('id', product['farmer_id'])
+                  .maybeSingle();
 
-            if (farmerLat != null && farmerLng != null) {
-              final distance = SupabaseService.calculateDistance(
-                lat1: customerLat,
-                lng1: customerLng,
-                lat2: farmerLat,
-                lng2: farmerLng,
-              );
-              return distance <= radiusKm;
+              if (farmerData != null) {
+                final farmerLat = farmerData['latitude'] as double?;
+                final farmerLng = farmerData['longitude'] as double?;
+
+                // Calculate distance if location exists, otherwise use 0
+                double distance = 0.0;
+                if (farmerLat != null && farmerLng != null) {
+                  distance = SupabaseService.calculateDistance(
+                    lat1: customerLat,
+                    lng1: customerLng,
+                    lat2: farmerLat,
+                    lng2: farmerLng,
+                  );
+                } else {
+                  // Show farmers without location as local (0km)
+                  distance = 0.0;
+                }
+
+                // Include ALL products to show all farmers
+                // Add farmer data and distance to product
+                product['users'] = farmerData;
+                product['farmer_name'] = farmerData['name'];
+                product['distance_km'] = distance;
+                
+                // Calculate freshness score
+                final freshnessScore = SupabaseService.calculateFreshnessScore(
+                  harvestTime: DateTime.parse(product['created_at']),
+                  farmerRating: (farmerData['rating'] as num?)?.toDouble() ?? 0.0,
+                  distanceKm: distance,
+                );
+                
+                product['freshness_score'] = freshnessScore;
+                product['freshness_label'] = SupabaseService.getFreshnessLabel(freshnessScore);
+                
+                allProducts.add(product);
+              }
+            } catch (e) {
+              print('Error processing product ${product['id']}: $e');
             }
-            return false;
-          }).toList();
+          }
+          
+          return allProducts;
         });
   }
 
@@ -93,6 +131,39 @@ class RealtimeService {
   // ═══════════════════════════════════════════════════════════════
   // FARMER REAL-TIME SUBSCRIPTIONS
   // ═══════════════════════════════════════════════════════════════
+
+  /// Subscribe to new farmer registrations (for customer panels)
+  static Stream<List<Map<String, dynamic>>> subscribeToNewFarmers() {
+    return _client
+        .from('users')
+        .stream(primaryKey: ['id'])
+        .order('created_at', ascending: false)
+        .map((users) => users
+            .where((user) => user['role'] == 'farmer' && user['is_verified'] == true)
+            .toList());
+  }
+
+  /// Subscribe to farmer profile updates (for customer panels)
+  static Stream<List<Map<String, dynamic>>> subscribeToFarmerUpdates() {
+    return _client
+        .from('users')
+        .stream(primaryKey: ['id'])
+        .order('updated_at', ascending: false)
+        .map((users) => users
+            .where((user) => user['role'] == 'farmer')
+            .toList());
+  }
+
+  /// Subscribe to all verified farmers (for nearby farmers list)
+  static Stream<List<Map<String, dynamic>>> subscribeToAllVerifiedFarmers() {
+    return _client
+        .from('users')
+        .stream(primaryKey: ['id'])
+        .order('name', ascending: true)
+        .map((users) => users
+            .where((user) => user['role'] == 'farmer' && user['is_verified'] == true)
+            .toList());
+  }
 
   /// Subscribe to farmer's incoming orders (real-time order alerts)
   static Stream<List<Map<String, dynamic>>> subscribeToFarmerOrders(
@@ -417,25 +488,26 @@ class RealtimeService {
     }
   }
 
-  /// Send group buy ready notification
-  static Future<void> sendGroupBuyReadyNotification({
-    required String groupBuyId,
-    required String productName,
+  /// Send new farmer welcome notification to customers
+  static Future<void> sendNewFarmerNotification({
+    required String farmerId,
+    required String farmerName,
+    required String farmerLocation,
   }) async {
     try {
-      // Get all members of the group buy
-      final members = await _client
-          .from('group_buy_members')
-          .select('customer_id')
-          .eq('group_buy_id', groupBuyId);
+      // Get all customers
+      final customers = await _client
+          .from('users')
+          .select('id')
+          .eq('role', 'customer');
 
-      final notifications = members.map((member) {
+      final notifications = customers.map((customer) {
         return {
-          'user_id': member['customer_id'],
-          'title': 'Group Buy Ready! 🎉',
-          'message': 'Your group buy for $productName has reached its target',
-          'type': 'group_buy_ready',
-          'data': {'group_buy_id': groupBuyId},
+          'user_id': customer['id'],
+          'title': 'New Farmer Joined! 👨‍🌾',
+          'message': '$farmerName from $farmerLocation is now selling fresh produce',
+          'type': 'new_farmer',
+          'data': {'farmer_id': farmerId},
           'is_read': false,
           'sent_at': DateTime.now().toIso8601String(),
         };
@@ -445,7 +517,7 @@ class RealtimeService {
         await _client.from('notifications').insert(notifications);
       }
     } catch (e) {
-      print('Error sending group buy notification: $e');
+      print('Error sending new farmer notification: $e');
     }
   }
 

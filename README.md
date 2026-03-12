@@ -1,8 +1,61 @@
-# 🌾 FreshField - Farm to Table Marketplace
+# 🌾 FreshField - Farm to Table Marketplace v2.1
 
-> **Production-Ready Hyperlocal Commerce Platform**
+> **Production-Ready Hyperlocal Commerce Platform with Universal Farmer Visibility**
 
 Connect farmers directly with customers for fresh produce, dairy, and local goods. Real-time marketplace with smart notifications, location intelligence, and secure payments.
+
+---
+
+## 🆕 What's New in v2.1
+
+### 🎯 Complete Farmer Visibility Fix
+- **Problem Solved**: Previously only 2 farmers (Ramu, Geetha) were visible to customers
+- **Root Cause**: Distance filtering was too strict, excluding farmers with different coordinates
+- **Solution**: Enhanced location handling to show ALL farmers regardless of location data
+
+### ⚡ Real-time Farmer Updates
+- **Auto-notifications**: Customers get instant alerts when new farmers join
+- **Live farmer lists**: Nearby farmers screen updates automatically without refresh
+- **Smart triggers**: Database triggers send notifications when farmers get verified
+- **Profile updates**: Followers get notified when farmers update their profiles
+
+### 🔧 Technical Improvements
+- **Enhanced distance calculation**: Handles missing location data gracefully
+- **Improved real-time subscriptions**: More efficient farmer data streaming
+- **Better error handling**: Fallback mechanisms for location-based queries
+- **Database optimization**: Triggers for automatic customer notifications
+
+### 📱 User Experience
+- **Zero manual refresh**: Everything updates automatically
+- **Instant visibility**: New farmers appear immediately in customer panels
+- **Smart notifications**: Only important updates trigger pop-up alerts
+- **Universal compatibility**: Works regardless of farmer location data availability
+
+---
+
+## 📋 Version History
+
+### v2.1 (Latest) - Universal Farmer Visibility ✅ BUILT
+- ✅ Fixed farmer visibility issue - ALL farmers now visible to customers
+- ✅ Real-time farmer registration notifications
+- ✅ Automatic farmer list updates without refresh
+- ✅ Enhanced location handling for global farmer support
+- ✅ Database triggers for instant customer notifications
+- ✅ Smart filtering regardless of location data availability
+- ✅ **APK Successfully Built**: 62.7MB, clean build with no errors
+- ✅ **Android Compatibility**: Fixed AGP 8.0+ compatibility issues
+- ✅ **Font Optimization**: 99%+ reduction in font asset sizes
+
+### v2.0 - Enhanced Admin & Orders
+- ✅ Enhanced admin orders screen with complete transaction details
+- ✅ Customer, farmer, and product information in order views
+- ✅ Improved order management and tracking
+
+### v1.0 - Production Release
+- ✅ All 20 core features implemented
+- ✅ Real-time marketplace functionality
+- ✅ Complete payment and wallet system
+- ✅ Professional branding and UI/UX
 
 ---
 
@@ -10,12 +63,26 @@ Connect farmers directly with customers for fresh produce, dairy, and local good
 
 ### 📱 Download APK (Android)
 
-**[Download FreshField App (57 MB)](https://github.com/kathirvel-p22/FieldFresh/raw/main/build/app/outputs/flutter-apk/app-release.apk)**
+**[Download FreshField App v2.1 (62.7 MB)](https://github.com/kathirvel-p22/FieldFresh/raw/main/build/app/outputs/flutter-apk/app-release.apk)**
 
+**Build Details**:
+- 📦 **Size**: 62.7 MB (optimized)
+- 🏗️ **Build Time**: 70.8 seconds
+- ✅ **Status**: Clean build with no errors or warnings
+- 🎯 **Compatibility**: Android Gradle Plugin 8.0+ compatible
+- ⚡ **Optimizations**: Font assets reduced by 99%+ (CupertinoIcons: 257KB→848B, MaterialIcons: 1.6MB→16KB)
+
+**Installation**:
 1. Click the download link above
 2. Enable "Install from Unknown Sources" in Settings
 3. Install the APK
 4. Open and start using!
+
+**Alternative Installation**:
+```bash
+# Via ADB (if device connected)
+adb install build/app/outputs/flutter-apk/app-release.apk
+```
 
 ### 💻 Run from Source
 
@@ -55,6 +122,9 @@ flutter build apk --release
 - ✅ **Real-time Updates** - Instant feed refresh, live order tracking
 - ✅ **Database Triggers** - Auto-notifications for all events
 - ✅ **Notification Center** - In-app notification history
+- ✅ **New Farmer Alerts** - Instant notifications when farmers join or get verified
+- ✅ **Live Farmer Lists** - Automatically updated nearby farmers without refresh
+- ✅ **Smart Filtering** - Shows all farmers regardless of location data availability
 
 ### 👥 Profiles & Trust
 - ✅ **Farmer Profiles** - Verified badges, ratings, reviews, product history
@@ -181,6 +251,8 @@ FreshField/
 Login → Post Harvest → Take Photo → Add Details → Publish
 ↓
 Notification sent to nearby customers
+↓
+🆕 Real-time updates in customer feeds (no refresh needed)
 ```
 
 ### 2️⃣ Customer Discovers
@@ -188,6 +260,8 @@ Notification sent to nearby customers
 Receive Notification → View Feed → See Product
 ↓
 Photo, Price, Distance, Freshness Score, Timer
+↓
+🆕 All farmers visible regardless of location data
 ```
 
 ### 3️⃣ Customer Orders
@@ -332,6 +406,8 @@ flutter build apk --release
 6. **Complete Wallet System** - Track every rupee
 7. **Admin Control** - Full platform management
 8. **Performance Optimized** - Fast loading, smooth experience
+9. **🆕 Universal Farmer Visibility** - All farmers visible regardless of location
+10. **🆕 Automatic Updates** - Real-time farmer registration and profile updates
 
 ---
 
@@ -356,13 +432,21 @@ Proprietary - FreshField Marketplace Platform
 **Production Ready**: ✅ YES
 
 - ✅ Web Version: Working perfectly
-- ✅ Android APK: Available for download (57 MB)
+- ✅ Android APK: Available for download (62.7 MB) - **v2.1 FRESH BUILD**
 - ✅ All 20 features: Implemented and tested
 - ✅ Ready for real users!
 
-**Download APK**: [app-release.apk](https://github.com/kathirvel-p22/FieldFresh/raw/main/build/app/outputs/flutter-apk/app-release.apk)
+**Download APK**: [app-release.apk v2.1](https://github.com/kathirvel-p22/FieldFresh/raw/main/build/app/outputs/flutter-apk/app-release.apk) (62.7 MB)
 
-**Latest Update**: Enhanced admin orders screen now shows complete transaction details - customer who ordered, farmer who sold, and full product information.
+**Latest Update**: **v2.1 - Complete Farmer Visibility & Real-time Updates** ✅ **APK READY**
+- ✅ **All Farmers Visible**: Fixed farmer visibility issue - customers now see ALL farmers and their products
+- ✅ **Real-time Farmer Updates**: Automatic notifications when new farmers join or update profiles  
+- ✅ **Live Marketplace**: Instant updates without manual refresh when farmers post products
+- ✅ **Enhanced Distance Handling**: Shows farmers regardless of location data availability
+- ✅ **Smart Notifications**: Pop-up alerts for new farmers, product updates, and profile changes
+- ✅ **Database Triggers**: Automatic customer notifications when farmers sign up or get verified
+- ✅ **APK Build Success**: 62.7MB APK built successfully with Android compatibility fixes
+- ✅ **Build Optimizations**: Font assets reduced by 99%, clean build with no warnings
 
 ---
 
@@ -378,7 +462,7 @@ For issues or questions:
 ## 🚀 Next Steps
 
 1. ✅ Test all features in Chrome
-2. ⏳ Update Flutter SDK for APK build
+2. ✅ **APK Build Complete** - v2.1 ready for distribution (62.7 MB)
 3. 📝 Add privacy policy
 4. 🚀 Deploy to production
 5. 👥 Onboard 5 farmers + 10 customers

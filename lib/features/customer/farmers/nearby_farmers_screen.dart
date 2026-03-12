@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/constants.dart';
 import '../../../services/supabase_service.dart';
+import '../../../services/realtime_service.dart';
 
 class NearbyFarmersScreen extends StatefulWidget {
   const NearbyFarmersScreen({super.key});
@@ -11,6 +13,7 @@ class NearbyFarmersScreen extends StatefulWidget {
 class _NearbyFarmersScreenState extends State<NearbyFarmersScreen> {
   List<Map<String, dynamic>> _farmers = [];
   bool _loading = true;
+  StreamSubscription? _farmersSubscription;
 
   // Demo location (Chennai - same as product defaults)
   final double _customerLat = 13.0827;
@@ -20,6 +23,45 @@ class _NearbyFarmersScreenState extends State<NearbyFarmersScreen> {
   void initState() {
     super.initState();
     _loadFarmers();
+    _setupRealTimeSubscription();
+  }
+
+  void _setupRealTimeSubscription() {
+    // Subscribe to real-time farmer updates
+    _farmersSubscription = RealtimeService.subscribeToAllVerifiedFarmers().listen((farmers) {
+      if (mounted) {
+        // Calculate distance for each farmer and filter by radius
+        final nearbyFarmers = farmers.where((farmer) {
+          final farmerLat = farmer['latitude'] as double?;
+          final farmerLng = farmer['longitude'] as double?;
+          
+          if (farmerLat != null && farmerLng != null) {
+            final distance = SupabaseService.calculateDistance(
+              lat1: _customerLat,
+              lng1: _customerLng,
+              lat2: farmerLat,
+              lng2: farmerLng,
+            );
+            farmer['distance_km'] = distance;
+            return distance <= 5000; // Use large radius to include all farmers
+          } else {
+            farmer['distance_km'] = 0.0; // Show farmers without location as local
+            return true;
+          }
+        }).toList();
+
+        setState(() {
+          _farmers = nearbyFarmers;
+          _loading = false;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _farmersSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadFarmers() async {
