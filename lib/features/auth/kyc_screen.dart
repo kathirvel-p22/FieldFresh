@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/constants.dart';
 import '../../../services/image_service.dart';
 import '../../../services/supabase_service.dart';
@@ -22,7 +23,7 @@ class _KycScreenState extends State<KycScreen> {
   final _districtCtrl = TextEditingController();
   final _stateCtrl = TextEditingController();
   final _client = Supabase.instance.client;
-  File? _profileImage;
+  XFile? _profileImage;
   double? _lat, _lng;
   bool _loading = false;
   bool _locating = false;
@@ -77,6 +78,44 @@ class _KycScreenState extends State<KycScreen> {
   Future<void> _getLocation() async {
     setState(() => _locating = true);
     try {
+      // Check if location services are enabled
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        setState(() => _locating = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location services are disabled. Please enable them in settings.')),
+          );
+        }
+        return;
+      }
+
+      // Check location permissions
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          setState(() => _locating = false);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Location permissions are denied. Please grant permission in settings.')),
+            );
+          }
+          return;
+        }
+      }
+      
+      if (permission == LocationPermission.deniedForever) {
+        setState(() => _locating = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location permissions are permanently denied. Please enable them in app settings.')),
+          );
+        }
+        return;
+      }
+
+      // Get current position
       final pos = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high);
       setState(() {
@@ -84,8 +123,20 @@ class _KycScreenState extends State<KycScreen> {
         _lng = pos.longitude;
         _locating = false;
       });
-    } catch (_) {
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Location detected successfully!')),
+        );
+      }
+    } catch (e) {
+      print('Error getting location: $e');
       setState(() => _locating = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to get location: $e')),
+        );
+      }
     }
   }
 
@@ -96,24 +147,27 @@ class _KycScreenState extends State<KycScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    
+    // Use default coordinates if location is not available
+    double finalLat = _lat ?? 13.0827; // Default to Chennai coordinates
+    double finalLng = _lng ?? 80.2707;
+    
     if (_lat == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enable location access')));
-      return;
+      print('DEBUG: Using default coordinates (Chennai) for user registration');
     }
     setState(() => _loading = true);
     try {
       String? imageUrl;
       if (_profileImage != null) {
-        imageUrl = await ImageService.uploadToCloudinary(_profileImage!);
+        imageUrl = await ImageService.uploadImage(_profileImage!);
       }
 
       // Update user with complete profile including location details
       await _client.from('users').update({
         'name': _nameCtrl.text.trim(),
         'profile_image': imageUrl,
-        'latitude': _lat,
-        'longitude': _lng,
+        'latitude': finalLat,
+        'longitude': finalLng,
         'address': _addressCtrl.text.trim(),
         'village': _villageCtrl.text.trim(),
         'city': _cityCtrl.text.trim(),
@@ -203,7 +257,7 @@ class _KycScreenState extends State<KycScreen> {
                               radius: 54,
                               backgroundColor: color.withOpacity(0.1),
                               backgroundImage: _profileImage != null
-                                  ? FileImage(_profileImage!)
+                                  ? FileImage(File(_profileImage!.path))
                                   : null,
                               child: _profileImage == null
                                   ? Text(data['emoji'] as String,
@@ -295,14 +349,14 @@ class _KycScreenState extends State<KycScreen> {
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                             color: _lat != null
-                                ? AppColors.success.withOpacity(0.07)
-                                : Colors.orange.withOpacity(0.07),
+                                ? AppColors.success.withValues(alpha: 0.07)
+                                : AppColors.info.withValues(alpha: 0.07),
                             borderRadius:
                                 BorderRadius.circular(AppSizes.radiusM),
                             border: Border.all(
                                 color: _lat != null
-                                    ? AppColors.success.withOpacity(0.3)
-                                    : Colors.orange.shade200)),
+                                    ? AppColors.success.withValues(alpha: 0.3)
+                                    : AppColors.info.withValues(alpha: 0.3))),
                         child: Row(children: [
                           _locating
                               ? const SizedBox(
@@ -313,10 +367,10 @@ class _KycScreenState extends State<KycScreen> {
                               : Icon(
                                   _lat != null
                                       ? Icons.my_location
-                                      : Icons.location_off,
+                                      : Icons.location_on,
                                   color: _lat != null
                                       ? AppColors.success
-                                      : Colors.orange,
+                                      : AppColors.info,
                                   size: 22),
                           const SizedBox(width: 12),
                           Expanded(
@@ -326,17 +380,17 @@ class _KycScreenState extends State<KycScreen> {
                                 Text(
                                     _lat != null
                                         ? '📍 Location detected'
-                                        : '⚠️ Location required',
+                                        : '📍 Location optional',
                                     style: TextStyle(
                                         fontWeight: FontWeight.w600,
                                         color: _lat != null
                                             ? AppColors.success
-                                            : Colors.orange,
+                                            : AppColors.info,
                                         fontSize: 13)),
                                 Text(
                                     _lat != null
                                         ? '${_lat!.toStringAsFixed(4)}, ${_lng!.toStringAsFixed(4)}'
-                                        : 'Needed to show products & notifications',
+                                        : 'Will use default location if not provided',
                                     style: const TextStyle(
                                         fontSize: 11,
                                         color: AppColors.textSecondary)),

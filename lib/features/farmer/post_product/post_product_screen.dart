@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/constants.dart';
 import '../../../models/product_model.dart';
 import '../../../services/supabase_service.dart';
@@ -24,7 +25,7 @@ class _PostProductScreenState extends State<PostProductScreen> {
   String _category = 'vegetables';
   String _unit = 'kg';
   int _validHours = 12;
-  List<File> _images = [];
+  List<XFile> _images = [];
   bool _loading = false;
   double? _lat, _lng;
   String _categorySearchQuery = '';
@@ -284,6 +285,9 @@ class _PostProductScreenState extends State<PostProductScreen> {
       final quantity = double.parse(_qtyCtrl.text.trim());
 
       final imageUrls = await ImageService.uploadMultiple(_images);
+      print('DEBUG: Images selected: ${_images.length}');
+      print('DEBUG: Image URLs after upload: $imageUrls');
+      
       final now = DateTime.now();
       final score = FreshnessService.calculateScore(
           harvestTime: now,
@@ -445,7 +449,7 @@ class _PostProductScreenState extends State<PostProductScreen> {
                                 decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(8),
                                     image: DecorationImage(
-                                        image: FileImage(_images[i]),
+                                        image: FileImage(File(_images[i].path)),
                                         fit: BoxFit.cover)));
                           }),
                 ),
@@ -484,7 +488,7 @@ class _PostProductScreenState extends State<PostProductScreen> {
               ),
               
               // Category Grid
-              Container(
+              SizedBox(
                 height: 140, // Increased height to accommodate text
                 child: GridView.builder(
                   scrollDirection: Axis.horizontal,
@@ -583,7 +587,7 @@ class _PostProductScreenState extends State<PostProductScreen> {
                 SizedBox(
                     width: 110,
                     child: DropdownButtonFormField<String>(
-                      value: _categoryUnits.contains(_unit) ? _unit : _categoryUnits.first,
+                      initialValue: _categoryUnits.contains(_unit) ? _unit : _categoryUnits.first,
                       decoration: const InputDecoration(labelText: 'Unit'),
                       items: _categoryUnits
                           .map(

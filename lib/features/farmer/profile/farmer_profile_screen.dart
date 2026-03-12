@@ -120,28 +120,88 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
   Future<void> _uploadProfileImage({required bool fromCamera}) async {
     setState(() => _uploadingImage = true);
     try {
-      final File? imageFile = fromCamera 
+      print('DEBUG: Starting farmer profile image upload (fromCamera: $fromCamera)');
+      
+      final imageFile = fromCamera 
           ? await ImageService.pickFromCamera()
           : await ImageService.pickFromGallery();
       
       if (imageFile != null) {
-        // Upload image
-        final imageUrls = await ImageService.uploadMultiple([imageFile]);
-        if (imageUrls.isNotEmpty) {
+        print('DEBUG: Image file selected: ${imageFile.name}');
+        print('DEBUG: Image file path: ${imageFile.path}');
+        
+        // Show progress message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Row(
+                children: [
+                  CircularProgressIndicator(strokeWidth: 2),
+                  SizedBox(width: 16),
+                  Expanded(child: Text('Uploading image... This may take a moment.')),
+                ],
+              ),
+              duration: Duration(seconds: 30),
+            ),
+          );
+        }
+        
+        // Upload single image using new method
+        final imageUrl = await ImageService.uploadImage(imageFile);
+        print('DEBUG: Image upload result: $imageUrl');
+        
+        if (imageUrl != null) {
+          print('DEBUG: Updating farmer profile with image URL: $imageUrl');
+          
           // Update user profile
           await SupabaseService.updateUserProfile({
-            'profile_image': imageUrls.first,
+            'profile_image': imageUrl,
           });
+          
+          print('DEBUG: Profile updated, reloading user data...');
           
           // Reload user data
           await _loadUserData();
           
-          _showSnackBar('Profile photo updated successfully!', isError: false);
+          print('DEBUG: User data reloaded successfully');
+          
+          // Hide progress message
+          if (mounted) {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          }
+          
+          _showSnackBar('Profile photo updated successfully! 🎉', isError: false);
+        } else {
+          print('DEBUG: No image URL returned from upload');
+          
+          // Hide progress message
+          if (mounted) {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          }
+          
+          _showSnackBar('Failed to upload image. Please check your internet connection and try again.', isError: true);
         }
+      } else {
+        print('DEBUG: No image file selected');
       }
     } catch (e) {
-      print('Error uploading profile image: $e');
-      _showSnackBar('Failed to upload profile photo', isError: true);
+      print('ERROR: Profile image upload failed: $e');
+      
+      // Hide progress message
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      }
+      
+      String errorMessage = 'Failed to upload profile photo';
+      if (e.toString().contains('network') || e.toString().contains('connection')) {
+        errorMessage = 'Network error. Please check your internet connection.';
+      } else if (e.toString().contains('timeout')) {
+        errorMessage = 'Upload timeout. Please try with a smaller image.';
+      } else if (e.toString().contains('size') || e.toString().contains('large')) {
+        errorMessage = 'Image too large. Please choose a smaller image.';
+      }
+      
+      _showSnackBar(errorMessage, isError: true);
     } finally {
       setState(() => _uploadingImage = false);
     }
@@ -203,12 +263,12 @@ class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
                 child: _loading
                     ? const Center(child: CircularProgressIndicator(color: Colors.white))
                     : _uploadingImage
-                        ? Column(
+                        ? const Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const CircularProgressIndicator(color: Colors.white),
-                              const SizedBox(height: 10),
-                              const Text(
+                              CircularProgressIndicator(color: Colors.white),
+                              SizedBox(height: 10),
+                              Text(
                                 'Updating profile photo...',
                                 style: TextStyle(color: Colors.white70, fontSize: 12),
                               ),

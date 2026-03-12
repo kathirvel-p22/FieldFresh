@@ -134,7 +134,12 @@ class SupabaseService {
     final userId = currentUserId;
     if (userId == null) throw Exception('User not logged in');
     
+    print('DEBUG: Updating user profile for user: $userId');
+    print('DEBUG: Updates: $updates');
+    
     await _client.from('users').update(updates).eq('id', userId);
+    
+    print('DEBUG: User profile updated successfully');
   }
 
   static Future<void> markNotificationAsRead(String notificationId) async {
@@ -168,12 +173,35 @@ class SupabaseService {
   }
 
   static Future<List<ProductModel>> getFarmerProducts(String farmerId) async {
-    final data = await _client
-        .from('products')
-        .select('*')
-        .eq('farmer_id', farmerId)
-        .order('created_at', ascending: false);
-    return data.map((d) => ProductModel.fromJson(d)).toList();
+    print('DEBUG: Fetching products for farmer: $farmerId');
+    
+    // Add a timestamp to prevent caching issues
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    print('DEBUG: Query timestamp: $timestamp');
+    
+    try {
+      final data = await _client
+          .from('products')
+          .select('*')
+          .eq('farmer_id', farmerId)
+          .neq('status', 'deleted') // Exclude deleted products
+          .order('created_at', ascending: false);
+      
+      print('DEBUG: Raw database response: ${data.length} records (excluding deleted)');
+      
+      final products = data.map((d) => ProductModel.fromJson(d)).toList();
+      print('DEBUG: Converted to ${products.length} ProductModel objects');
+      
+      // Print product IDs and names for debugging
+      for (final product in products) {
+        print('DEBUG: DB Product: ${product.name} (ID: ${product.id}, Status: ${product.status})');
+      }
+      
+      return products;
+    } catch (e) {
+      print('ERROR: Failed to fetch farmer products: $e');
+      rethrow;
+    }
   }
 
   static Future<ProductModel> postProduct(ProductModel product) async {
@@ -280,15 +308,6 @@ class SupabaseService {
     return OrderModel.fromJson(data);
   }
 
-  static Future<List<OrderModel>> getCustomerOrders(String customerId) async {
-    final data = await _client
-        .from('orders')
-        .select('*, products(name, image_urls)')
-        .eq('customer_id', customerId)
-        .order('created_at', ascending: false);
-    return data.map((d) => OrderModel.fromJson(d)).toList();
-  }
-
   static Future<List<OrderModel>> getFarmerOrders(String farmerId) async {
     final data = await _client
         .from('orders')
@@ -326,12 +345,39 @@ class SupabaseService {
           .order('created_at', ascending: false);
 
   static Stream<List<Map<String, dynamic>>> listenToCustomerOrders(
-          String customerId) =>
-      _client
+          String customerId) {
+    print('DEBUG: listenToCustomerOrders called with customerId: $customerId');
+    
+    try {
+      return _client
           .from('orders')
           .stream(primaryKey: ['id'])
           .eq('customer_id', customerId)
           .order('created_at', ascending: false);
+    } catch (e) {
+      print('DEBUG: Stream failed, error: $e');
+      rethrow;
+    }
+  }
+
+  // Fallback method for customer orders (non-streaming)
+  static Future<List<OrderModel>> getCustomerOrders(String customerId) async {
+    print('DEBUG: getCustomerOrders called with customerId: $customerId');
+    
+    try {
+      final data = await _client
+          .from('orders')
+          .select('*')
+          .eq('customer_id', customerId)
+          .order('created_at', ascending: false);
+      
+      print('DEBUG: getCustomerOrders returned ${data.length} orders');
+      return data.map((d) => OrderModel.fromJson(d)).toList();
+    } catch (e) {
+      print('DEBUG: getCustomerOrders failed: $e');
+      rethrow;
+    }
+  }
 
   static Stream<List<Map<String, dynamic>>> listenToProducts() => _client
       .from('products')
@@ -423,8 +469,15 @@ class SupabaseService {
       required int rating,
       required int freshnessRating,
       String? comment}) async {
+    
+    final customerId = currentUserId;
+    if (customerId == null) {
+      throw Exception('Customer not logged in');
+    }
+    
     await _client.from('reviews').insert({
       'order_id': orderId,
+      'customer_id': customerId, // Add missing customer_id
       'farmer_id': farmerId,
       'rating': rating,
       'freshness_rating': freshnessRating,
@@ -522,29 +575,85 @@ class SupabaseService {
   }
 
   static Future<void> deleteCustomer(String customerId) async {
-    // Delete customer's orders first (cascade delete)
-    await _client
-        .from('orders')
-        .delete()
-        .eq('customer_id', customerId);
-    
-    // Delete customer's reviews
-    await _client
-        .from('reviews')
-        .delete()
-        .eq('customer_id', customerId);
-    
-    // Delete customer's wallet transactions
-    await _client
-        .from('wallet_transactions')
-        .delete()
-        .eq('user_id', customerId);
-    
-    // Finally delete the customer
-    await _client
-        .from('users')
-        .delete()
-        .eq('id', customerId);
+    try {
+      print('DEBUG: Starting customer deletion process for ID: $customerId');
+      
+      // First verify the customer exists
+      final existingCustomer = await _client
+          .from('users')
+          .select('id, name, role')
+          .eq('id', customerId)
+          .maybeSingle();
+      
+      if (existingCustomer == null) {
+        throw Exception('Customer not found');
+      }
+      
+      print('DEBUG: Found customer: ${existingCustomer['name']} (${existingCustomer['role']})');
+      
+      // Delete customer's orders first (cascade delete)
+      print('DEBUG: Deleting customer orders...');
+      final orderDeleteResult = await _client
+          .from('orders')
+          .delete()
+          .eq('customer_id', customerId);
+      print('DEBUG: Orders deletion result: $orderDeleteResult');
+      
+      // Delete customer's reviews
+      print('DEBUG: Deleting customer reviews...');
+      final reviewDeleteResult = await _client
+          .from('reviews')
+          .delete()
+          .eq('customer_id', customerId);
+      print('DEBUG: Reviews deletion result: $reviewDeleteResult');
+      
+      // Delete customer's wallet transactions (if table exists)
+      try {
+        print('DEBUG: Deleting wallet transactions...');
+        await _client
+            .from('wallet_transactions')
+            .delete()
+            .eq('user_id', customerId);
+      } catch (e) {
+        print('DEBUG: Wallet transactions table might not exist: $e');
+      }
+      
+      // Delete customer's notifications (if table exists)
+      try {
+        print('DEBUG: Deleting notifications...');
+        await _client
+            .from('notifications')
+            .delete()
+            .eq('user_id', customerId);
+      } catch (e) {
+        print('DEBUG: Notifications deletion failed: $e');
+      }
+      
+      // Finally delete the customer
+      print('DEBUG: Deleting customer record...');
+      final customerDeleteResult = await _client
+          .from('users')
+          .delete()
+          .eq('id', customerId);
+      print('DEBUG: Customer deletion result: $customerDeleteResult');
+      
+      // Verify deletion
+      final verifyResult = await _client
+          .from('users')
+          .select('id')
+          .eq('id', customerId)
+          .maybeSingle();
+      
+      if (verifyResult != null) {
+        throw Exception('Customer deletion failed - record still exists');
+      }
+      
+      print('DEBUG: Customer deletion completed successfully');
+      
+    } catch (e) {
+      print('ERROR: Customer deletion failed: $e');
+      rethrow;
+    }
   }
 
   static Future<Map<String, dynamic>?> getFarmerDetails(String farmerId) async {
@@ -965,7 +1074,7 @@ class SupabaseService {
       print('Farmer verified successfully - customers will be notified automatically');
     } catch (e) {
       print('Error verifying farmer: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -982,7 +1091,7 @@ class SupabaseService {
       print('Farmer profile updated - followers will be notified automatically');
     } catch (e) {
       print('Error updating farmer profile: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -1142,5 +1251,74 @@ class SupabaseService {
     });
 
     return nearbyFarmers;
+  }
+
+  // Product deletion method
+  static Future<void> deleteProduct(String productId) async {
+    try {
+      print('DEBUG: SupabaseService.deleteProduct called with ID: $productId');
+      
+      // First, check if the product exists
+      final existingProduct = await _client
+          .from('products')
+          .select('id, name, farmer_id')
+          .eq('id', productId)
+          .maybeSingle();
+      
+      if (existingProduct == null) {
+        print('DEBUG: Product not found in database: $productId');
+        throw Exception('Product not found');
+      }
+      
+      print('DEBUG: Found product to delete: ${existingProduct['name']} (${existingProduct['id']})');
+      
+      // Check if there are any orders for this product that might prevent deletion
+      final relatedOrders = await _client
+          .from('orders')
+          .select('id')
+          .eq('product_id', productId);
+      
+      print('DEBUG: Found ${relatedOrders.length} related orders');
+      
+      // If there are related orders, we might need to handle them differently
+      if (relatedOrders.isNotEmpty) {
+        print('DEBUG: Product has related orders, attempting soft delete...');
+        // Instead of deleting, mark as inactive
+        await _client
+            .from('products')
+            .update({'status': 'deleted'})
+            .eq('id', productId);
+        print('DEBUG: Product marked as deleted (soft delete)');
+      } else {
+        print('DEBUG: No related orders, attempting hard delete...');
+        // Delete the product from database
+        final result = await _client
+            .from('products')
+            .delete()
+            .eq('id', productId);
+        
+        print('DEBUG: Delete operation completed. Result: $result');
+      }
+      
+      // Verify deletion/update by checking product status
+      final verifyResult = await _client
+          .from('products')
+          .select('id, status')
+          .eq('id', productId)
+          .maybeSingle();
+      
+      if (verifyResult == null) {
+        print('DEBUG: Product successfully deleted from database (hard delete)');
+      } else if (verifyResult['status'] == 'deleted') {
+        print('DEBUG: Product successfully marked as deleted (soft delete)');
+      } else {
+        print('WARNING: Product still exists with status: ${verifyResult['status']}');
+        throw Exception('Product deletion failed - still exists in database');
+      }
+      
+    } catch (e) {
+      print('ERROR: Failed to delete product: $e');
+      rethrow;
+    }
   }
 }
