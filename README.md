@@ -81,11 +81,14 @@ Connect farmers directly with customers for fresh produce, dairy, and local good
 
 ### 📱 Download APK (Android)
 
-**[Download FreshField App v2.4 (62.9 MB)](https://github.com/kathirvel-p22/FieldFresh/releases/download/v2.4.0/app-release.apk)**
+**[📱 Download FieldFresh App v2.4 (62.9 MB)](https://github.com/kathirvel-p22/FieldFresh/releases)**
 
-**Alternative Download Methods**:
-- **GitHub Releases**: [v2.4.0 Release Page](https://github.com/kathirvel-p22/FieldFresh/releases/tag/v2.4.0)
-- **Build Locally**: `flutter build apk --release` (recommended for developers)
+**Download Options**:
+1. **GitHub Releases** (Recommended): [Visit Releases Page](https://github.com/kathirvel-p22/FieldFresh/releases) → Download `app-release.apk`
+2. **Build Locally**: `flutter build apk --release` (for developers)
+3. **Web Version**: `flutter run -d chrome` (for testing)
+
+> **Note**: If the release download link shows 404, please build the APK locally using the instructions below.
 
 **Build Details**:
 - 📦 **Size**: 62.9 MB (optimized)
@@ -113,9 +116,19 @@ adb install build/app/outputs/flutter-apk/app-release.apk
 # Run in Chrome (Recommended for testing)
 flutter run -d chrome
 
-# Build APK yourself
+# Build APK yourself (Recommended method)
+flutter clean
+flutter pub get
 flutter build apk --release
+# APK will be at: build/app/outputs/flutter-apk/app-release.apk
 ```
+
+**Local APK Build Steps**:
+1. Clone repository: `git clone https://github.com/kathirvel-p22/FieldFresh.git`
+2. Navigate to folder: `cd FieldFresh`
+3. Get dependencies: `flutter pub get`
+4. Build APK: `flutter build apk --release`
+5. Install APK from: `build/app/outputs/flutter-apk/app-release.apk`
 
 **Test Accounts**:
 - 👨‍🌾 Farmer: `9876543211`
@@ -493,7 +506,9 @@ Proprietary - FreshField Marketplace Platform
 - ✅ All 20 features: Implemented and tested with working image system
 - ✅ Ready for real users with complete functionality!
 
-**Download APK**: [app-release.apk v2.4](https://github.com/kathirvel-p22/FieldFresh/releases/download/v2.4.0/app-release.apk) (62.9 MB)
+**Download APK**: 
+- **GitHub Releases**: [Visit Releases Page](https://github.com/kathirvel-p22/FieldFresh/releases) (62.9 MB)
+- **Build Locally**: `flutter build apk --release` (recommended)
 
 **Latest Update**: **v2.4 - Complete Image Upload System & Real-time Updates** ✅ **APK READY**
 - ✅ **Working Image Uploads**: Profile photos and product images upload successfully to Supabase Storage
