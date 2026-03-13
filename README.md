@@ -4,6 +4,18 @@
 
 Connect farmers directly with customers for fresh produce, dairy, and local goods. Real-time marketplace with smart notifications, location intelligence, and secure payments.
 
+## 📱 Quick Download
+
+**[⬇️ Download APK Now (62.9 MB)](https://github.com/kathirvel-p22/FieldFresh/raw/main/build/app/outputs/flutter-apk/app-release.apk)**
+
+**Installation Steps**:
+1. Click the download link above
+2. Enable "Unknown Sources" in Android Settings → Security
+3. Install the downloaded APK file
+4. Open FieldFresh and start using!
+
+**Test Accounts**: Farmer: `9876543211` | Customer: `9876543210` | Admin: Tap logo 5x, code: `admin123`
+
 ---
 
 ## 🆕 What's New in v2.4
@@ -81,14 +93,14 @@ Connect farmers directly with customers for fresh produce, dairy, and local good
 
 ### 📱 Download APK (Android)
 
-**[📱 Download FieldFresh App v2.4 (62.9 MB)](https://github.com/kathirvel-p22/FieldFresh/releases)**
+**[📱 Download FieldFresh App v2.4 (62.9 MB)](https://github.com/kathirvel-p22/FieldFresh/raw/main/build/app/outputs/flutter-apk/app-release.apk)**
 
-**Download Options**:
-1. **GitHub Releases** (Recommended): [Visit Releases Page](https://github.com/kathirvel-p22/FieldFresh/releases) → Download `app-release.apk`
+**Direct Download**: Click the link above to download APK directly to your device
+
+**Alternative Download Options**:
+1. **Direct Download** (Recommended): [app-release.apk](https://github.com/kathirvel-p22/FieldFresh/raw/main/build/app/outputs/flutter-apk/app-release.apk) - Click to download
 2. **Build Locally**: `flutter build apk --release` (for developers)
 3. **Web Version**: `flutter run -d chrome` (for testing)
-
-> **Note**: If the release download link shows 404, please build the APK locally using the instructions below.
 
 **Build Details**:
 - 📦 **Size**: 62.9 MB (optimized)
@@ -99,6 +111,12 @@ Connect farmers directly with customers for fresh produce, dairy, and local good
 - 🗄️ **Storage**: Supabase Storage integration with proper RLS policies
 
 **Installation**:
+1. **Download**: Click [this link](https://github.com/kathirvel-p22/FieldFresh/raw/main/build/app/outputs/flutter-apk/app-release.apk) to download APK
+2. **Enable Unknown Sources**: Go to Settings → Security → Enable "Install from Unknown Sources"
+3. **Install**: Open the downloaded APK file and tap "Install"
+4. **Open**: Launch FieldFresh app and start using!
+
+**Alternative Installation**:
 1. Click the download link above
 2. Enable "Install from Unknown Sources" in Settings
 3. Install the APK
@@ -507,8 +525,8 @@ Proprietary - FreshField Marketplace Platform
 - ✅ Ready for real users with complete functionality!
 
 **Download APK**: 
-- **GitHub Releases**: [Visit Releases Page](https://github.com/kathirvel-p22/FieldFresh/releases) (62.9 MB)
-- **Build Locally**: `flutter build apk --release` (recommended)
+- **Direct Download**: [app-release.apk](https://github.com/kathirvel-p22/FieldFresh/raw/main/build/app/outputs/flutter-apk/app-release.apk) (62.9 MB) - Click to download
+- **Build Locally**: `flutter build apk --release` (for developers)
 
 **Latest Update**: **v2.4 - Complete Image Upload System & Real-time Updates** ✅ **APK READY**
 - ✅ **Working Image Uploads**: Profile photos and product images upload successfully to Supabase Storage
