@@ -1,12 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/constants.dart';
 import '../../../services/image_service.dart';
-import '../../../services/supabase_service.dart';
+import 'verification_flow_screen.dart';
 
 class KycScreen extends StatefulWidget {
   final dynamic extra; // Can be String (role) or Map (user data)
@@ -84,7 +83,9 @@ class _KycScreenState extends State<KycScreen> {
         setState(() => _locating = false);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Location services are disabled. Please enable them in settings.')),
+            const SnackBar(
+                content: Text(
+                    'Location services are disabled. Please enable them in settings.')),
           );
         }
         return;
@@ -98,18 +99,22 @@ class _KycScreenState extends State<KycScreen> {
           setState(() => _locating = false);
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Location permissions are denied. Please grant permission in settings.')),
+              const SnackBar(
+                  content: Text(
+                      'Location permissions are denied. Please grant permission in settings.')),
             );
           }
           return;
         }
       }
-      
+
       if (permission == LocationPermission.deniedForever) {
         setState(() => _locating = false);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Location permissions are permanently denied. Please enable them in app settings.')),
+            const SnackBar(
+                content: Text(
+                    'Location permissions are permanently denied. Please enable them in app settings.')),
           );
         }
         return;
@@ -123,7 +128,7 @@ class _KycScreenState extends State<KycScreen> {
         _lng = pos.longitude;
         _locating = false;
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Location detected successfully!')),
@@ -147,11 +152,11 @@ class _KycScreenState extends State<KycScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     // Use default coordinates if location is not available
     double finalLat = _lat ?? 13.0827; // Default to Chennai coordinates
     double finalLng = _lng ?? 80.2707;
-    
+
     if (_lat == null) {
       print('DEBUG: Using default coordinates (Chennai) for user registration');
     }
@@ -162,7 +167,8 @@ class _KycScreenState extends State<KycScreen> {
         imageUrl = await ImageService.uploadImage(_profileImage!);
       }
 
-      // Update user with complete profile including location details
+      // Update user with complete profile but DON'T mark as verified yet
+      // Users need to go through proper verification flow
       await _client.from('users').update({
         'name': _nameCtrl.text.trim(),
         'profile_image': imageUrl,
@@ -173,34 +179,53 @@ class _KycScreenState extends State<KycScreen> {
         'city': _cityCtrl.text.trim(),
         'district': _districtCtrl.text.trim(),
         'state': _stateCtrl.text.trim(),
-        'is_verified': true,
-        'is_kyc_done': true,
+        'is_verified': false, // Will be set to true after verification flow
+        'is_kyc_done': true, // Profile setup is complete
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', _userId);
-
-      // Set demo user ID for session
-      SupabaseService.setDemoUserId(_userId);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content:
-                  Text('Profile setup complete! Welcome to FieldFresh 🌾')),
+            content: Text(
+                'Profile setup complete! Now let\'s verify your account 🔐'),
+            backgroundColor: AppColors.success,
+          ),
         );
 
-        // Navigate to appropriate dashboard
-        if (_role == 'farmer') {
-          context.go(AppRoutes.farmerHome);
-        } else if (_role == 'admin') {
-          context.go(AppRoutes.adminDashboard);
-        } else {
-          context.go(AppRoutes.customerHome);
-        }
+        // Navigate to verification flow for new users
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => VerificationFlowScreen(
+              userId: _userId,
+              userRole: _role,
+            ),
+          ),
+        );
       }
     } catch (e) {
+      print('DEBUG: KYC save error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Error: $e'), backgroundColor: AppColors.error));
+        String errorMessage = 'Error saving profile. Please try again.';
+
+        // Handle specific database errors
+        if (e.toString().contains('sent_at')) {
+          errorMessage =
+              'Database configuration issue. Please contact support.';
+        } else if (e.toString().contains('column') &&
+            e.toString().contains('does not exist')) {
+          errorMessage =
+              'Database schema issue. Please run the database fix script.';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 5),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -307,8 +332,9 @@ class _KycScreenState extends State<KycScreen> {
                             labelText: 'Village / Area *',
                             hintText: 'Enter village or area name',
                             prefixIcon: Icon(Icons.home_outlined)),
-                        validator: (v) =>
-                            v!.trim().isEmpty ? 'Village/Area is required' : null),
+                        validator: (v) => v!.trim().isEmpty
+                            ? 'Village/Area is required'
+                            : null),
                     const SizedBox(height: 14),
 
                     // City

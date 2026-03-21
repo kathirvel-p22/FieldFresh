@@ -22,6 +22,7 @@ dependencies:
 
   # ── State Management ─────────────────────
   flutter_riverpod: ^2.5.1
+  provider: ^6.1.1
 
   # ── Navigation ───────────────────────────
   go_router: ^13.2.0
@@ -72,6 +73,7 @@ dependencies:
   url_launcher: ^6.3.0
   share_plus: ^9.0.0
   path_provider: ^2.1.3
+  device_info_plus: ^10.1.0
 
   # ── Localizations ─────────────────────────
   flutter_localizations:
@@ -82,6 +84,7 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^3.0.0
   flutter_launcher_icons: ^0.13.1
+  intl_utils: ^2.8.7
 
 flutter:
   uses-material-design: true
@@ -89,6 +92,14 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
+
+# Internationalization configuration
+flutter_intl:
+  enabled: true
+  class_name: S
+  main_locale: en
+  arb_dir: lib/l10n
+  output_dir: lib/generated
 
 flutter_launcher_icons:
   android: true

@@ -8,6 +8,9 @@ import '../../../core/constants.dart';
 import '../../../services/supabase_service.dart';
 import '../../../services/cart_service.dart';
 import '../../../services/realtime_service.dart';
+import '../../../widgets/trust_score_widget.dart';
+import '../../../widgets/verification_badges_widget.dart';
+import '../../../utils/localization_helper.dart';
 import '../order/cart_screen.dart';
 
 class CustomerFeedScreen extends StatefulWidget {
@@ -252,10 +255,10 @@ class _CustomerFeedScreenState extends State<CustomerFeedScreen> {
                       Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Column(
+                            Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(children: [
+                                  const Row(children: [
                                     Icon(Icons.location_on,
                                         color: Colors.white70, size: 13),
                                     Text(' Chennai, TN',
@@ -263,8 +266,8 @@ class _CustomerFeedScreenState extends State<CustomerFeedScreen> {
                                             color: Colors.white70,
                                             fontSize: 12))
                                   ]),
-                                  Text('Fresh Market 🌾',
-                                      style: TextStyle(
+                                  Text(LocalizationHelper.getText(context, 'freshMarket'),
+                                      style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 22,
                                           fontWeight: FontWeight.bold)),
@@ -334,13 +337,13 @@ class _CustomerFeedScreenState extends State<CustomerFeedScreen> {
                           child: TextField(
                             controller: _searchCtrl,
                             onChanged: (v) => setState(() => _searchQuery = v),
-                            decoration: const InputDecoration(
-                                hintText: 'Search vegetables, fruits...',
-                                prefixIcon: Icon(Icons.search,
+                            decoration: InputDecoration(
+                                hintText: LocalizationHelper.getText(context, 'searchVegetablesFruits'),
+                                prefixIcon: const Icon(Icons.search,
                                     size: 20, color: AppColors.textHint),
                                 border: InputBorder.none,
                                 contentPadding:
-                                    EdgeInsets.symmetric(vertical: 12)),
+                                    const EdgeInsets.symmetric(vertical: 12)),
                           )),
                     ]),
               )),
@@ -358,7 +361,7 @@ class _CustomerFeedScreenState extends State<CustomerFeedScreen> {
               itemBuilder: (_, i) {
                 final isAll = i == 0;
                 final cat = isAll
-                    ? {'id': 'all', 'name': 'All', 'icon': '🌱'}
+                    ? {'id': 'all', 'name': LocalizationHelper.getText(context, 'all'), 'icon': '🌱'}
                     : ProductCategories.all[i - 1];
                 final selected = _selectedCategory == cat['id'];
                 return GestureDetector(
@@ -428,20 +431,20 @@ class _CustomerFeedScreenState extends State<CustomerFeedScreen> {
     }
 
     if (products.isEmpty) {
-      return const SliverToBoxAdapter(
+      return SliverToBoxAdapter(
           child: SizedBox(
               height: 300,
               child: Center(
                   child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                    Text('🌿', style: TextStyle(fontSize: 64)),
-                    SizedBox(height: 12),
-                    Text('No fresh produce nearby right now',
-                        style: TextStyle(color: AppColors.textSecondary)),
-                    Text('Check back soon!',
+                    const Text('🌿', style: TextStyle(fontSize: 64)),
+                    const SizedBox(height: 12),
+                    Text(LocalizationHelper.getText(context, 'noFreshProduceNearby'),
+                        style: const TextStyle(color: AppColors.textSecondary)),
+                    Text(LocalizationHelper.getText(context, 'checkBackSoon'),
                         style:
-                            TextStyle(color: AppColors.textHint, fontSize: 12)),
+                            const TextStyle(color: AppColors.textHint, fontSize: 12)),
                   ]))));
     }
 
@@ -504,11 +507,12 @@ class _AdvancedProductCardState extends State<AdvancedProductCard> {
 
     String timerText;
     if (remaining.isNegative) {
-      timerText = 'Expired';
-    } else if (remaining.inHours > 0)
+      timerText = LocalizationHelper.getText(context, 'expired');
+    } else if (remaining.inHours > 0) {
       timerText = '${remaining.inHours}h ${remaining.inMinutes % 60}m';
-    else
+    } else {
       timerText = '${remaining.inMinutes}m ${remaining.inSeconds % 60}s';
+    }
 
     final imageUrls = p['image_urls'] as List<dynamic>?;
     final farmerName = p['users']['name'] as String?;
@@ -595,35 +599,61 @@ class _AdvancedProductCardState extends State<AdvancedProductCard> {
                 left: 0,
                 right: 0,
                 child: Container(
-                    height: 36,
+                    height: 50,
                     decoration: BoxDecoration(
                         gradient: LinearGradient(
                             colors: [
                           Colors.transparent,
-                          Colors.black.withValues(alpha: 0.65)
+                          Colors.black.withValues(alpha: 0.75)
                         ],
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter)),
                     child: Padding(
                         padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            Expanded(
-                                child: Text(farmerName ?? 'Farmer',
-                                    style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600),
-                                    overflow: TextOverflow.ellipsis)),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                    child: Text(farmerName ?? 'Farmer',
+                                        style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600),
+                                        overflow: TextOverflow.ellipsis)),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.star,
+                                        color: Colors.amber, size: 11),
+                                    const SizedBox(width: 2),
+                                    Text(farmerRating.toStringAsFixed(1),
+                                        style: const TextStyle(
+                                            color: Colors.white, fontSize: 10)),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
                             Row(
                               children: [
-                                const Icon(Icons.star,
-                                    color: Colors.amber, size: 11),
-                                const SizedBox(width: 2),
-                                Text(farmerRating.toStringAsFixed(1),
-                                    style: const TextStyle(
-                                        color: Colors.white, fontSize: 10)),
+                                // Trust Score
+                                if (p['users']['id'] != null)
+                                  TrustScoreWidget(
+                                    userId: p['users']['id'],
+                                    size: 20,
+                                  ),
+                                const SizedBox(width: 8),
+                                // Verification Badges
+                                if (p['users']['id'] != null)
+                                  Expanded(
+                                    child: VerificationBadgesWidget(
+                                      userId: p['users']['id'],
+                                      maxBadges: 3,
+                                      badgeSize: 16,
+                                    ),
+                                  ),
                               ],
                             ),
                           ],
@@ -673,7 +703,7 @@ class _AdvancedProductCardState extends State<AdvancedProductCard> {
                             borderRadius: BorderRadius.circular(8)),
                         textStyle: const TextStyle(
                             fontSize: 11, fontWeight: FontWeight.bold)),
-                    child: const Text('Order Now'),
+                    child: Text(LocalizationHelper.getText(context, 'orderNow')),
                   )),
             ]),
           ),

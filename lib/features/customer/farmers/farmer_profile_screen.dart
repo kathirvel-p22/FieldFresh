@@ -1,396 +1,551 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import '../../../core/constants.dart';
-import '../../../services/supabase_service.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../../../widgets/trust_score_widget.dart';
+import '../../../widgets/verification_badges_widget.dart';
+import '../../../services/enterprise_service_manager.dart';
+import '../../../services/privacy_service.dart';
 
 class FarmerProfileScreen extends StatefulWidget {
   final String farmerId;
-  const FarmerProfileScreen({super.key, required this.farmerId});
+  final PaymentStatus paymentStatus;
+
+  const FarmerProfileScreen({
+    super.key,
+    required this.farmerId,
+    this.paymentStatus = PaymentStatus.none,
+  });
+
   @override
   State<FarmerProfileScreen> createState() => _FarmerProfileScreenState();
 }
 
 class _FarmerProfileScreenState extends State<FarmerProfileScreen> {
-  Map<String, dynamic>? _farmerData;
-  bool _loading = true;
-  bool _hasAdvancePayment = false;
-  bool _isFollowing = false;
-  bool _processingPayment = false;
+  final _enterpriseManager = EnterpriseServiceManager();
+  FilteredUserProfile? _farmerProfile;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadFarmerData();
+    _loadFarmerProfile();
   }
 
-  Future<void> _loadFarmerData() async {
-    setState(() => _loading = true);
+  Future<void> _loadFarmerProfile() async {
     try {
-      final customerId = SupabaseService.currentUserId;
+      final profile = await _enterpriseManager.getFilteredUserProfile(
+        widget.farmerId,
+        widget.paymentStatus,
+        requesterId: _enterpriseManager.currentUserId,
+      );
 
-      // Check if customer has paid advance
-      if (customerId != null) {
-        _hasAdvancePayment = await SupabaseService.hasAdvancePayment(
-            customerId, widget.farmerId);
-        _isFollowing = await SupabaseService.isFollowingFarmer(
-            customerId, widget.farmerId);
+      if (mounted) {
+        setState(() {
+          _farmerProfile = profile;
+          _isLoading = false;
+        });
       }
-
-      // Load appropriate farmer details
-      final farmerData = _hasAdvancePayment
-          ? await SupabaseService.getFarmerFullDetails(widget.farmerId)
-          : await SupabaseService.getFarmerLimitedDetails(widget.farmerId);
-
-      setState(() {
-        _farmerData = farmerData;
-        _loading = false;
-      });
     } catch (e) {
-      print('Error loading farmer data: $e');
-      setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _payAdvance() async {
-    final customerId = SupabaseService.currentUserId;
-    if (customerId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please login to continue')),
-      );
-      return;
-    }
-
-    setState(() => _processingPayment = true);
-    try {
-      // Create advance payment (₹20)
-      await SupabaseService.createAdvancePayment(
-        customerId: customerId,
-        farmerId: widget.farmerId,
-        productId: '', // Can be empty for farmer profile unlock
-        advanceAmount: 20.0,
-        totalAmount: 20.0,
-      );
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Payment successful! Farmer details unlocked.'),
-          backgroundColor: AppColors.success,
-        ),
-      );
-
-      // Reload farmer data with full details
-      _loadFarmerData();
-    } catch (e) {
-      print('Error processing payment: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Payment failed: $e')),
-      );
-    } finally {
-      setState(() => _processingPayment = false);
-    }
-  }
-
-  Future<void> _toggleFollow() async {
-    final customerId = SupabaseService.currentUserId;
-    if (customerId == null) return;
-
-    try {
-      if (_isFollowing) {
-        await SupabaseService.unfollowFarmer(customerId, widget.farmerId);
-      } else {
-        await SupabaseService.followFarmer(customerId, widget.farmerId);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
       }
-      setState(() => _isFollowing = !_isFollowing);
-    } catch (e) {
-      print('Error toggling follow: $e');
     }
-  }
-
-  void _copyToClipboard(String text, String label) {
-    Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label copied to clipboard')),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: const Text('Farmer Profile'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
         actions: [
           IconButton(
-            onPressed: _toggleFollow,
-            icon: Icon(
-              _isFollowing ? Icons.favorite : Icons.favorite_border,
-              color: _isFollowing ? Colors.red : Colors.white,
-            ),
+            icon: const Icon(Icons.share),
+            onPressed: _shareFarmerProfile,
           ),
         ],
       ),
-      body: _loading
+      body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _farmerData == null
-              ? const Center(child: Text('Farmer not found'))
-              : SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      // Header Card
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(24),
-                        decoration: const BoxDecoration(
-                          gradient: AppColors.farmerGradient,
-                        ),
-                        child: Column(
-                          children: [
-                            CircleAvatar(
-                              radius: 50,
-                              backgroundColor:
-                                  Colors.white.withValues(alpha: 0.2),
-                              child: const Icon(Icons.person,
-                                  size: 50, color: Colors.white),
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  _farmerData!['name'] as String? ?? 'Farmer',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+          : _farmerProfile == null
+              ? _buildErrorState()
+              : _buildProfileContent(),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.error_outline,
+            size: 64,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Failed to load farmer profile',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _loadFarmerProfile,
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileContent() {
+    final profile = _farmerProfile!;
+    final visibleData = profile.visibleData;
+
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          // Profile Header
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                // Profile Image and Basic Info
+                Row(
+                  children: [
+                    // Profile Image
+                    Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.grey[300]!, width: 2),
+                      ),
+                      child: ClipOval(
+                        child: visibleData['profile_image'] != null
+                            ? CachedNetworkImage(
+                                imageUrl: visibleData['profile_image'],
+                                fit: BoxFit.cover,
+                                placeholder: (context, url) => Container(
+                                  color: Colors.grey[200],
+                                  child: const Icon(Icons.person, size: 40),
                                 ),
-                                if (_farmerData!['is_verified'] == true) ...[
-                                  const SizedBox(width: 8),
-                                  const Icon(Icons.verified,
-                                      color: Colors.white, size: 20),
-                                ],
-                              ],
+                                errorWidget: (context, url, error) => Container(
+                                  color: Colors.grey[200],
+                                  child: const Icon(Icons.person, size: 40),
+                                ),
+                              )
+                            : Container(
+                                color: Colors.grey[200],
+                                child: const Icon(Icons.person, size: 40),
+                              ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 16),
+
+                    // Name and Location
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            visibleData['name'] ?? 'Unknown Farmer',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
                             ),
-                            const SizedBox(height: 8),
+                          ),
+                          const SizedBox(height: 4),
+                          if (visibleData['district'] != null)
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.star,
-                                    color: Colors.amber, size: 18),
+                                Icon(
+                                  Icons.location_on,
+                                  size: 16,
+                                  color: Colors.grey[600],
+                                ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  ((_farmerData!['rating'] as num?)
-                                              ?.toDouble() ??
-                                          0.0)
-                                      .toStringAsFixed(1),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
+                                  visibleData['district'],
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[600],
                                   ),
                                 ),
                               ],
                             ),
-                          ],
-                        ),
+                          const SizedBox(height: 8),
+                          // Verification Badges
+                          VerificationBadgesWidget(
+                            userId: widget.farmerId,
+                            maxBadges: 4,
+                            badgeSize: 20,
+                          ),
+                        ],
                       ),
+                    ),
 
-                      // Info Cards
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          children: [
-                            // Location Info (Always visible)
-                            _InfoCard(
-                              icon: Icons.location_on,
-                              title: 'Location',
-                              children: [
-                                _InfoRow(
-                                    'District',
-                                    _farmerData!['district'] as String? ??
-                                        'N/A'),
-                                _InfoRow('City',
-                                    _farmerData!['city'] as String? ?? 'N/A'),
-                              ],
-                            ),
+                    // Trust Score
+                    TrustScoreWidget(
+                      userId: widget.farmerId,
+                      size: 70,
+                    ),
+                  ],
+                ),
 
-                            // Locked/Unlocked Content
-                            if (!_hasAdvancePayment) ...[
-                              const SizedBox(height: 16),
-                              _LockedCard(
-                                onUnlock: _payAdvance,
-                                processing: _processingPayment,
-                              ),
-                            ] else ...[
-                              const SizedBox(height: 16),
-                              _InfoCard(
-                                icon: Icons.phone,
-                                title: 'Contact Details',
-                                children: [
-                                  _InfoRow(
-                                    'Phone',
-                                    _farmerData!['phone'] as String? ?? 'N/A',
-                                    onTap: () => _copyToClipboard(
-                                        _farmerData!['phone'] as String? ?? '',
-                                        'Phone number'),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              _InfoCard(
-                                icon: Icons.home,
-                                title: 'Full Address',
-                                children: [
-                                  _InfoRow(
-                                      'Village',
-                                      _farmerData!['village'] as String? ??
-                                          'N/A'),
-                                  _InfoRow('City',
-                                      _farmerData!['city'] as String? ?? 'N/A'),
-                                  _InfoRow(
-                                      'District',
-                                      _farmerData!['district'] as String? ??
-                                          'N/A'),
-                                  _InfoRow(
-                                      'State',
-                                      _farmerData!['state'] as String? ??
-                                          'N/A'),
-                                  if (_farmerData!['address'] != null)
-                                    _InfoRow('Full Address',
-                                        _farmerData!['address'] as String),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              _InfoCard(
-                                icon: Icons.location_searching,
-                                title: 'GPS Coordinates',
-                                children: [
-                                  _InfoRow(
-                                    'Latitude',
-                                    (_farmerData!['latitude'] as double?)
-                                            ?.toStringAsFixed(6) ??
-                                        'N/A',
-                                    onTap: () => _copyToClipboard(
-                                        (_farmerData!['latitude'] as double?)
-                                                ?.toString() ??
-                                            '',
-                                        'Latitude'),
-                                  ),
-                                  _InfoRow(
-                                    'Longitude',
-                                    (_farmerData!['longitude'] as double?)
-                                            ?.toStringAsFixed(6) ??
-                                        'N/A',
-                                    onTap: () => _copyToClipboard(
-                                        (_farmerData!['longitude'] as double?)
-                                                ?.toString() ??
-                                            '',
-                                        'Longitude'),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ],
+                const SizedBox(height: 16),
+
+                // Rating
+                if (visibleData['rating'] != null)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ...List.generate(5, (index) {
+                        final rating =
+                            (visibleData['rating'] as num).toDouble();
+                        return Icon(
+                          index < rating ? Icons.star : Icons.star_border,
+                          color: Colors.amber,
+                          size: 20,
+                        );
+                      }),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${visibleData['rating']} / 5.0',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey[700],
                         ),
                       ),
                     ],
                   ),
-                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Contact Information
+          _buildContactSection(),
+
+          const SizedBox(height: 16),
+
+          // Farm Details
+          _buildFarmDetailsSection(),
+
+          const SizedBox(height: 16),
+
+          // Privacy Upgrade Message
+          if (profile.upgradeMessage != null)
+            _buildUpgradeMessage(profile.upgradeMessage!),
+
+          const SizedBox(height: 24),
+        ],
+      ),
     );
   }
-}
 
-class _InfoCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final List<Widget> children;
-  const _InfoCard(
-      {required this.icon, required this.title, required this.children});
+  Widget _buildContactSection() {
+    final visibleData = _farmerProfile!.visibleData;
 
-  @override
-  Widget build(BuildContext context) {
     return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppSizes.radiusL),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
             offset: const Offset(0, 2),
-          )
+          ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
-              Icon(icon, color: AppColors.primary, size: 20),
-              const SizedBox(width: 8),
+              Icon(
+                Icons.contact_phone,
+                color: Colors.green,
+                size: 20,
+              ),
+              SizedBox(width: 8),
               Text(
-                title,
-                style: const TextStyle(
+                'Contact Information',
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          ...children,
+
+          const SizedBox(height: 16),
+
+          // Phone Number
+          if (visibleData['phone'] != null)
+            _buildContactItem(
+              Icons.phone,
+              'Phone',
+              visibleData['phone'],
+              onTap: () => _callFarmer(visibleData['phone']),
+            )
+          else
+            _buildLockedContactItem(
+              Icons.phone,
+              'Phone Number',
+              'Make an advance payment to unlock',
+            ),
+
+          // Email
+          if (visibleData['email'] != null)
+            _buildContactItem(
+              Icons.email,
+              'Email',
+              visibleData['email'],
+              onTap: () => _emailFarmer(visibleData['email']),
+            )
+          else if (_farmerProfile!.appliedLevel != DisclosureLevel.full)
+            _buildLockedContactItem(
+              Icons.email,
+              'Email Address',
+              'Confirm your order to unlock',
+            ),
+
+          // Location
+          if (visibleData['latitude'] != null &&
+              visibleData['longitude'] != null)
+            _buildContactItem(
+              Icons.location_on,
+              'Exact Location',
+              'Tap to view on map',
+              onTap: () => _showLocationOnMap(
+                visibleData['latitude'],
+                visibleData['longitude'],
+              ),
+            )
+          else if (visibleData['approximate_location'] != null)
+            _buildContactItem(
+              Icons.location_on,
+              'Approximate Location',
+              'Within 5km radius',
+              onTap: () => _showApproximateLocation(),
+            )
+          else
+            _buildLockedContactItem(
+              Icons.location_on,
+              'Location',
+              'Make a payment to unlock location',
+            ),
         ],
       ),
     );
   }
-}
 
-class _InfoRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final VoidCallback? onTap;
-  const _InfoRow(this.label, this.value, {this.onTap});
+  Widget _buildFarmDetailsSection() {
+    final visibleData = _farmerProfile!.visibleData;
 
-  @override
-  Widget build(BuildContext context) {
+    if (visibleData['farm_name'] == null &&
+        visibleData['address'] == null &&
+        visibleData['city'] == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.agriculture,
+                color: Colors.green,
+                size: 20,
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Farm Details',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (visibleData['farm_name'] != null)
+            _buildDetailItem('Farm Name', visibleData['farm_name']),
+          if (visibleData['address'] != null)
+            _buildDetailItem('Address', visibleData['address']),
+          if (visibleData['city'] != null)
+            _buildDetailItem('City', visibleData['city']),
+          if (visibleData['farm_size'] != null)
+            _buildDetailItem('Farm Size', visibleData['farm_size']),
+          if (visibleData['crop_types'] != null)
+            _buildDetailItem('Crops', visibleData['crop_types'].join(', ')),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContactItem(
+    IconData icon,
+    String label,
+    String value, {
+    VoidCallback? onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 20,
+                color: Colors.grey[600],
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    Text(
+                      value,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (onTap != null)
+                Icon(
+                  Icons.arrow_forward_ios,
+                  size: 16,
+                  color: Colors.grey[400],
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLockedContactItem(
+    IconData icon,
+    String label,
+    String message,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.grey[50],
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey[200]!),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[500],
+                    ),
+                  ),
+                  Text(
+                    message,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.lock,
+              size: 16,
+              color: Colors.grey[400],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailItem(String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 100,
+            width: 80,
             child: Text(
               label,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 13,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
               ),
             ),
           ),
           Expanded(
-            child: GestureDetector(
-              onTap: onTap,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      value,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  if (onTap != null) ...[
-                    const SizedBox(width: 4),
-                    const Icon(Icons.copy,
-                        size: 14, color: AppColors.textSecondary),
-                  ],
-                ],
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
@@ -398,123 +553,80 @@ class _InfoRow extends StatelessWidget {
       ),
     );
   }
-}
 
-class _LockedCard extends StatelessWidget {
-  final VoidCallback onUnlock;
-  final bool processing;
-  const _LockedCard({required this.onUnlock, required this.processing});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildUpgradeMessage(String message) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppSizes.radiusL),
-        border: Border.all(
-            color: AppColors.warning.withValues(alpha: 0.3), width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          )
+        color: Colors.blue[50],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blue[200]!),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.info_outline,
+            color: Colors.blue[600],
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.blue[700],
+              ),
+            ),
+          ),
         ],
       ),
-      child: Column(
-        children: [
-          const Icon(Icons.lock, size: 48, color: AppColors.warning),
-          const SizedBox(height: 12),
-          const Text(
-            'Farmer Details Locked',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Pay ₹20 advance to unlock:',
-            style: TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 14,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.check_circle,
-                        size: 16, color: AppColors.success),
-                    SizedBox(width: 6),
-                    Text('Phone number', style: TextStyle(fontSize: 13)),
-                  ],
-                ),
-                SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(Icons.check_circle,
-                        size: 16, color: AppColors.success),
-                    SizedBox(width: 6),
-                    Text('Full address', style: TextStyle(fontSize: 13)),
-                  ],
-                ),
-                SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(Icons.check_circle,
-                        size: 16, color: AppColors.success),
-                    SizedBox(width: 6),
-                    Text('GPS coordinates', style: TextStyle(fontSize: 13)),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: processing ? null : onUnlock,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.warning,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-              child: processing
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation(Colors.white),
-                      ),
-                    )
-                  : const Text(
-                      'Pay ₹20 & Unlock Details',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'This amount will be adjusted in your first order',
-            style: TextStyle(
-              fontSize: 11,
-              color: AppColors.textHint,
-            ),
-            textAlign: TextAlign.center,
+    );
+  }
+
+  void _shareFarmerProfile() {
+    // Implement share functionality
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Share functionality coming soon')),
+    );
+  }
+
+  void _callFarmer(String phoneNumber) {
+    // Implement call functionality
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Calling $phoneNumber...')),
+    );
+  }
+
+  void _emailFarmer(String email) {
+    // Implement email functionality
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Opening email to $email...')),
+    );
+  }
+
+  void _showLocationOnMap(double latitude, double longitude) {
+    // Implement map functionality
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Opening map at $latitude, $longitude')),
+    );
+  }
+
+  void _showApproximateLocation() {
+    // Show approximate location info
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Approximate Location'),
+        content: const Text(
+          'This farmer\'s location is shown within a 5km radius for privacy. '
+          'Confirm your order to get the exact location.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
           ),
         ],
       ),

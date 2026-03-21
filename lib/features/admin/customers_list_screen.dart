@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../../core/constants.dart';
 import '../../services/supabase_service.dart';
+import '../../services/auth_service.dart';
 
 class CustomersListScreen extends StatefulWidget {
   const CustomersListScreen({super.key});
@@ -119,7 +120,38 @@ class _CustomersListScreenState extends State<CustomersListScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Customer'),
-        content: Text('Are you sure you want to delete $customerName?\n\nThis will also delete all their orders and data.'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Are you sure you want to delete $customerName?'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.warning),
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Note:',
+                    style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.warning),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    '• If this customer has orders, they will be deactivated but preserved in database\n'
+                    '• If no orders exist, the customer will be permanently deleted\n'
+                    '• Order history will be maintained for business records',
+                    style: TextStyle(fontSize: 12, color: AppColors.warning),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -161,54 +193,102 @@ class _CustomersListScreenState extends State<CustomersListScreen> {
       
       _loadCustomers();
       if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.check_circle, color: AppColors.success),
-                SizedBox(width: 8),
-                Text('Deleted'),
-              ],
-            ),
-            content: const Text('Customer deleted successfully'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-            ],
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ $customerName deleted successfully'),
+            backgroundColor: AppColors.success,
+            duration: const Duration(seconds: 3),
           ),
         );
       }
     } catch (e) {
-      print('DEBUG: Customer deletion failed: $e');
+      print('ERROR: Customer deletion failed: $e');
       
       // Close loading dialog
       if (mounted) Navigator.pop(context);
       
       if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.error, color: AppColors.error),
-                SizedBox(width: 8),
-                Text('Error'),
-              ],
-            ),
-            content: Text('Failed to delete customer:\n\n${e.toString()}'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-            ],
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Failed to delete $customerName: ${e.toString()}'),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 5),
           ),
         );
       }
     }
+  }
+
+  void _showLogoutConfirmation(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('🚪 Sign Out'),
+        content: const Text(
+          'Are you sure you want to sign out of your admin account?\n\n'
+          'You\'ll need to login again to access the admin dashboard.'
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              
+              // Show logout progress
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => const AlertDialog(
+                  content: Row(
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(width: 16),
+                      Text('Signing out...'),
+                    ],
+                  ),
+                ),
+              );
+              
+              try {
+                final authService = Provider.of<AuthService>(context, listen: false);
+                await authService.logout(context: context);
+                
+                // Close loading dialog
+                if (mounted) Navigator.pop(context);
+                
+                // Show success message
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('✅ Signed out successfully'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                }
+              } catch (e) {
+                // Close loading dialog
+                if (mounted) Navigator.pop(context);
+                
+                // Show error message
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('❌ Logout failed: ${e.toString()}'),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Sign Out'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -225,10 +305,7 @@ class _CustomersListScreenState extends State<CustomersListScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await SupabaseService.signOut();
-              if (context.mounted) context.go(AppRoutes.roleSelect);
-            },
+            onPressed: () => _showLogoutConfirmation(context),
           ),
         ],
       ),

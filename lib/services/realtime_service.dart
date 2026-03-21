@@ -9,6 +9,29 @@ class RealtimeService {
   static final Map<String, RealtimeChannel> _channels = {};
 
   // ═══════════════════════════════════════════════════════════════
+  // ENTERPRISE FEATURES - TRUST SCORE BROADCASTING
+  // ═══════════════════════════════════════════════════════════════
+
+  /// Broadcast trust score update to all connected clients
+  static Future<void> broadcastTrustScoreUpdate(String userId, double trustScore) async {
+    try {
+      // Create a notification for trust score update
+      await _client.from('notifications').insert({
+        'user_id': userId,
+        'title': 'Trust Score Updated',
+        'message': 'Your trust score has been updated to ${trustScore.toInt()}%',
+        'type': 'trust_score_update',
+        'data': {
+          'trust_score': trustScore,
+          'timestamp': DateTime.now().toIso8601String(),
+        },
+      });
+    } catch (e) {
+      debugPrint('Failed to broadcast trust score update: $e');
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // CUSTOMER REAL-TIME SUBSCRIPTIONS
   // ═══════════════════════════════════════════════════════════════
 

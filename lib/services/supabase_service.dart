@@ -103,6 +103,38 @@ class SupabaseService {
     }
   }
 
+  /// Get user verification status from database
+  static Future<Map<String, String?>> getUserVerificationStatus(String userId) async {
+    try {
+      final verifications = await _client
+          .from('user_verifications')
+          .select('verification_type, status')
+          .eq('user_id', userId);
+      
+      // Convert to map with verification types as keys
+      final statusMap = <String, String?>{
+        'phone': null,
+        'document': null,
+        'location': null,
+        'selfie': null,
+      };
+      
+      for (final verification in verifications) {
+        statusMap[verification['verification_type']] = verification['status'];
+      }
+      
+      return statusMap;
+    } catch (e) {
+      print('Error getting user verification status: $e');
+      return {
+        'phone': null,
+        'document': null,
+        'location': null,
+        'selfie': null,
+      };
+    }
+  }
+
   static Future<String> createBasicUser(String phone, String role) async {
     try {
       final userId = const Uuid().v4(); // Generate a UUID
@@ -508,10 +540,19 @@ class SupabaseService {
           .update({'is_read': true}).eq('id', notificationId);
 
   static Future<Map<String, dynamic>> getAdminStats() async {
-    final farmers =
-        await _client.from('users').select('id').eq('role', 'farmer');
-    final customers =
-        await _client.from('users').select('id').eq('role', 'customer');
+    // Use same filtering as getAllFarmers to ensure consistency
+    final farmers = await _client
+        .from('users')
+        .select('id')
+        .eq('role', 'farmer')
+        .or('is_active.is.null,is_active.eq.true'); // Include null values as active
+    
+    final customers = await _client
+        .from('users')
+        .select('id')
+        .eq('role', 'customer')
+        .or('is_active.is.null,is_active.eq.true'); // Include null values as active
+    
     final orders = await _client.from('orders').select('total_amount, status');
     final products =
         await _client.from('products').select('id').eq('status', 'active');
@@ -534,6 +575,7 @@ class SupabaseService {
         .from('users')
         .select('*')
         .eq('role', 'farmer')
+        .or('is_active.is.null,is_active.eq.true') // Include null values as active
         .order('created_at', ascending: false);
     return List<Map<String, dynamic>>.from(data);
   }
@@ -542,29 +584,42 @@ class SupabaseService {
     try {
       print('Fetching all customers...'); // Debug
       
-      // Get all users first to see what we have
-      final allUsers = await _client
+      final data = await _client
           .from('users')
           .select('*')
+          .eq('role', 'customer')
+          .or('is_active.is.null,is_active.eq.true') // Include null values as active
           .order('created_at', ascending: false);
       
-      print('Total users in database: ${allUsers.length}'); // Debug
+      print('Filtered customers: ${data.length}'); // Debug
       
-      // Filter for customers
-      final customers = allUsers.where((user) {
-        final role = user['role']?.toString().toLowerCase();
-        final isCustomer = role == 'customer';
-        print('User: ${user['name']} - Role: $role - IsCustomer: $isCustomer'); // Debug
-        return isCustomer;
-      }).toList();
-      
-      print('Filtered customers: ${customers.length}'); // Debug
-      
-      return List<Map<String, dynamic>>.from(customers);
+      return List<Map<String, dynamic>>.from(data);
     } catch (e) {
       print('Error fetching customers: $e');
       rethrow;
     }
+  }
+
+  /// Get inactive (soft-deleted) farmers for admin management
+  static Future<List<Map<String, dynamic>>> getInactiveFarmers() async {
+    final data = await _client
+        .from('users')
+        .select('*')
+        .eq('role', 'farmer')
+        .eq('is_active', false)
+        .order('updated_at', ascending: false);
+    return List<Map<String, dynamic>>.from(data);
+  }
+
+  /// Get inactive (soft-deleted) customers for admin management
+  static Future<List<Map<String, dynamic>>> getInactiveCustomers() async {
+    final data = await _client
+        .from('users')
+        .select('*')
+        .eq('role', 'customer')
+        .eq('is_active', false)
+        .order('updated_at', ascending: false);
+    return List<Map<String, dynamic>>.from(data);
   }
 
   static Future<void> updateCustomerStatus(String customerId, bool isBlocked) async {
@@ -572,88 +627,6 @@ class SupabaseService {
         .from('users')
         .update({'is_blocked': isBlocked})
         .eq('id', customerId);
-  }
-
-  static Future<void> deleteCustomer(String customerId) async {
-    try {
-      print('DEBUG: Starting customer deletion process for ID: $customerId');
-      
-      // First verify the customer exists
-      final existingCustomer = await _client
-          .from('users')
-          .select('id, name, role')
-          .eq('id', customerId)
-          .maybeSingle();
-      
-      if (existingCustomer == null) {
-        throw Exception('Customer not found');
-      }
-      
-      print('DEBUG: Found customer: ${existingCustomer['name']} (${existingCustomer['role']})');
-      
-      // Delete customer's orders first (cascade delete)
-      print('DEBUG: Deleting customer orders...');
-      final orderDeleteResult = await _client
-          .from('orders')
-          .delete()
-          .eq('customer_id', customerId);
-      print('DEBUG: Orders deletion result: $orderDeleteResult');
-      
-      // Delete customer's reviews
-      print('DEBUG: Deleting customer reviews...');
-      final reviewDeleteResult = await _client
-          .from('reviews')
-          .delete()
-          .eq('customer_id', customerId);
-      print('DEBUG: Reviews deletion result: $reviewDeleteResult');
-      
-      // Delete customer's wallet transactions (if table exists)
-      try {
-        print('DEBUG: Deleting wallet transactions...');
-        await _client
-            .from('wallet_transactions')
-            .delete()
-            .eq('user_id', customerId);
-      } catch (e) {
-        print('DEBUG: Wallet transactions table might not exist: $e');
-      }
-      
-      // Delete customer's notifications (if table exists)
-      try {
-        print('DEBUG: Deleting notifications...');
-        await _client
-            .from('notifications')
-            .delete()
-            .eq('user_id', customerId);
-      } catch (e) {
-        print('DEBUG: Notifications deletion failed: $e');
-      }
-      
-      // Finally delete the customer
-      print('DEBUG: Deleting customer record...');
-      final customerDeleteResult = await _client
-          .from('users')
-          .delete()
-          .eq('id', customerId);
-      print('DEBUG: Customer deletion result: $customerDeleteResult');
-      
-      // Verify deletion
-      final verifyResult = await _client
-          .from('users')
-          .select('id')
-          .eq('id', customerId)
-          .maybeSingle();
-      
-      if (verifyResult != null) {
-        throw Exception('Customer deletion failed - record still exists');
-      }
-      
-      print('DEBUG: Customer deletion completed successfully');
-      
-    } catch (e) {
-      print('ERROR: Customer deletion failed: $e');
-      rethrow;
-    }
   }
 
   static Future<Map<String, dynamic>?> getFarmerDetails(String farmerId) async {
@@ -1253,54 +1226,95 @@ class SupabaseService {
     return nearbyFarmers;
   }
 
-  // Product deletion method
-  static Future<void> deleteProduct(String productId) async {
+  // Product deletion method with enhanced error handling
+  static Future<Map<String, dynamic>> deleteProduct(String productId) async {
     try {
       print('DEBUG: SupabaseService.deleteProduct called with ID: $productId');
       
       // First, check if the product exists
       final existingProduct = await _client
           .from('products')
-          .select('id, name, farmer_id')
+          .select('id, name, farmer_id, status')
           .eq('id', productId)
           .maybeSingle();
       
       if (existingProduct == null) {
         print('DEBUG: Product not found in database: $productId');
-        throw Exception('Product not found');
+        return {
+          'success': false,
+          'error': 'Product not found',
+          'message': 'The product you are trying to delete does not exist.',
+        };
       }
       
-      print('DEBUG: Found product to delete: ${existingProduct['name']} (${existingProduct['id']})');
+      print('DEBUG: Found product to delete: ${existingProduct['name']} (${existingProduct['id']}) - Status: ${existingProduct['status']}');
       
-      // Check if there are any orders for this product that might prevent deletion
+      // Check if there are any orders for this product
       final relatedOrders = await _client
           .from('orders')
-          .select('id')
+          .select('id, status')
           .eq('product_id', productId);
       
       print('DEBUG: Found ${relatedOrders.length} related orders');
       
-      // If there are related orders, we might need to handle them differently
-      if (relatedOrders.isNotEmpty) {
-        print('DEBUG: Product has related orders, attempting soft delete...');
-        // Instead of deleting, mark as inactive
+      // Check for other references that might prevent deletion
+      final groupBuys = await _client
+          .from('group_buys')
+          .select('id')
+          .eq('product_id', productId);
+      
+      print('DEBUG: Found ${groupBuys.length} related group buys');
+      
+      String deletionType;
+      String message;
+      
+      // If there are ANY references (orders, group buys, etc.), use soft delete
+      if (relatedOrders.isNotEmpty || groupBuys.isNotEmpty) {
+        print('DEBUG: Product has references, performing soft delete...');
+        
         await _client
             .from('products')
-            .update({'status': 'deleted'})
-            .eq('id', productId);
-        print('DEBUG: Product marked as deleted (soft delete)');
-      } else {
-        print('DEBUG: No related orders, attempting hard delete...');
-        // Delete the product from database
-        final result = await _client
-            .from('products')
-            .delete()
+            .update({
+              'status': 'deleted',
+              'updated_at': DateTime.now().toIso8601String(),
+            })
             .eq('id', productId);
         
-        print('DEBUG: Delete operation completed. Result: $result');
+        deletionType = 'soft';
+        message = 'Product has been removed from marketplace but preserved in database due to existing orders/references.';
+        print('DEBUG: Product marked as deleted (soft delete)');
+      } else {
+        print('DEBUG: No references found, attempting hard delete...');
+        
+        try {
+          // Try to delete the product completely
+          await _client
+              .from('products')
+              .delete()
+              .eq('id', productId);
+          
+          deletionType = 'hard';
+          message = 'Product has been permanently deleted from the database.';
+          print('DEBUG: Product successfully deleted from database (hard delete)');
+        } catch (deleteError) {
+          print('DEBUG: Hard delete failed, falling back to soft delete: $deleteError');
+          
+          // If hard delete fails, fall back to soft delete
+          await _client
+              .from('products')
+              .update({
+                'status': 'deleted',
+                'updated_at': DateTime.now().toIso8601String(),
+              })
+              .eq('id', productId);
+          
+          deletionType = 'soft';
+          message = 'Product has been removed from marketplace (soft delete due to database constraints).';
+          print('DEBUG: Fallback soft delete completed');
+        }
       }
       
-      // Verify deletion/update by checking product status
+      // Verify the operation
       final verifyResult = await _client
           .from('products')
           .select('id, status')
@@ -1308,16 +1322,287 @@ class SupabaseService {
           .maybeSingle();
       
       if (verifyResult == null) {
-        print('DEBUG: Product successfully deleted from database (hard delete)');
+        print('DEBUG: Product successfully removed from database');
       } else if (verifyResult['status'] == 'deleted') {
-        print('DEBUG: Product successfully marked as deleted (soft delete)');
+        print('DEBUG: Product successfully marked as deleted');
       } else {
-        print('WARNING: Product still exists with status: ${verifyResult['status']}');
-        throw Exception('Product deletion failed - still exists in database');
+        print('WARNING: Product deletion may have failed - status: ${verifyResult['status']}');
+        return {
+          'success': false,
+          'error': 'Deletion verification failed',
+          'message': 'Product deletion could not be verified. Please try again.',
+        };
       }
+      
+      // Trigger marketplace update
+      await _triggerMarketplaceUpdate();
+      
+      return {
+        'success': true,
+        'deletionType': deletionType,
+        'message': message,
+        'productName': existingProduct['name'],
+      };
       
     } catch (e) {
       print('ERROR: Failed to delete product: $e');
+      return {
+        'success': false,
+        'error': e.toString(),
+        'message': 'Failed to delete product: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Permanently delete products that are already marked as deleted
+  /// This is for admin cleanup of soft-deleted products
+  static Future<Map<String, dynamic>> permanentlyDeleteProduct(String productId) async {
+    try {
+      print('DEBUG: Permanently deleting product: $productId');
+      
+      // Check if product is already marked as deleted
+      final product = await _client
+          .from('products')
+          .select('id, name, status')
+          .eq('id', productId)
+          .eq('status', 'deleted')
+          .maybeSingle();
+      
+      if (product == null) {
+        return {
+          'success': false,
+          'error': 'Product not found or not marked as deleted',
+          'message': 'Product must be marked as deleted before permanent deletion.',
+        };
+      }
+      
+      // Check for foreign key references that would prevent deletion
+      final relatedOrders = await _client
+          .from('orders')
+          .select('id')
+          .eq('product_id', productId);
+      
+      final relatedGroupBuys = await _client
+          .from('group_buys')
+          .select('id')
+          .eq('product_id', productId);
+      
+      if (relatedOrders.isNotEmpty || relatedGroupBuys.isNotEmpty) {
+        // Cannot permanently delete due to foreign key constraints
+        return {
+          'success': false,
+          'error': 'Cannot permanently delete due to references',
+          'message': 'Cannot permanently delete this product because it has ${relatedOrders.length} order(s) and ${relatedGroupBuys.length} group buy(s) referencing it. This product must remain in the database to preserve order history and data integrity.',
+        };
+      }
+      
+      // Perform permanent deletion
+      await _client
+          .from('products')
+          .delete()
+          .eq('id', productId);
+      
+      print('DEBUG: Product permanently deleted from database');
+      
+      // Trigger marketplace update
+      await _triggerMarketplaceUpdate();
+      
+      return {
+        'success': true,
+        'message': 'Product has been permanently deleted from the database.',
+        'productName': product['name'],
+      };
+      
+    } catch (e) {
+      print('ERROR: Failed to permanently delete product: $e');
+      return {
+        'success': false,
+        'error': e.toString(),
+        'message': 'Failed to permanently delete product: ${e.toString()}',
+      };
+    }
+  }
+
+  /// Trigger marketplace update after product changes
+  static Future<void> _triggerMarketplaceUpdate() async {
+    try {
+      // Update marketplace cache timestamp
+      await _client
+          .from('system_settings')
+          .upsert({
+            'key': 'marketplace_last_updated',
+            'value': DateTime.now().toIso8601String(),
+          });
+      
+      print('DEBUG: Marketplace update triggered');
+    } catch (e) {
+      print('WARNING: Failed to trigger marketplace update: $e');
+      // Don't throw error as this is not critical
+    }
+  }
+
+  // CRUD Operations for Products Management
+  static Future<void> createProduct(Map<String, dynamic> productData) async {
+    try {
+      await _client.from('products').insert(productData);
+    } catch (e) {
+      print('Error creating product: $e');
+      rethrow;
+    }
+  }
+
+  static Future<void> updateProduct(String productId, Map<String, dynamic> updates) async {
+    try {
+      await _client
+          .from('products')
+          .update(updates)
+          .eq('id', productId);
+    } catch (e) {
+      print('Error updating product: $e');
+      rethrow;
+    }
+  }
+
+  /// Delete farmer with proper cascade handling
+  static Future<void> deleteFarmer(String farmerId) async {
+    try {
+      print('DEBUG: Attempting to delete farmer: $farmerId');
+      
+      // First, check if farmer has any orders
+      final orders = await _client
+          .from('orders')
+          .select('id')
+          .eq('farmer_id', farmerId);
+      
+      print('DEBUG: Found ${orders.length} orders for farmer');
+      
+      if (orders.isNotEmpty) {
+        // If farmer has orders, we need to handle them first
+        // Use is_active field instead of changing role
+        print('DEBUG: Farmer has orders, performing soft delete using is_active field');
+        
+        // Mark all farmer's products as deleted
+        await _client
+            .from('products')
+            .update({'status': 'deleted'})
+            .eq('farmer_id', farmerId);
+        
+        // Mark farmer as inactive using is_active field instead of role change
+        await _client
+            .from('users')
+            .update({
+              'is_active': false,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', farmerId);
+        
+        print('DEBUG: Farmer soft deleted successfully using is_active field');
+      } else {
+        // If no orders, we can safely delete farmer and their products
+        print('DEBUG: No orders found, performing hard delete');
+        
+        // Delete farmer's products first
+        await _client
+            .from('products')
+            .delete()
+            .eq('farmer_id', farmerId);
+        
+        // Delete farmer
+        await _client
+            .from('users')
+            .delete()
+            .eq('id', farmerId);
+        
+        print('DEBUG: Farmer hard deleted successfully');
+      }
+    } catch (e) {
+      print('ERROR: Failed to delete farmer: $e');
+      rethrow;
+    }
+  }
+
+  /// Delete customer with proper cascade handling
+  static Future<void> deleteCustomer(String customerId) async {
+    try {
+      print('DEBUG: Attempting to delete customer: $customerId');
+      
+      // Check if customer has any orders
+      final orders = await _client
+          .from('orders')
+          .select('id')
+          .eq('customer_id', customerId);
+      
+      print('DEBUG: Found ${orders.length} orders for customer');
+      
+      if (orders.isNotEmpty) {
+        // If customer has orders, perform soft delete using is_active field
+        print('DEBUG: Customer has orders, performing soft delete using is_active field');
+        
+        await _client
+            .from('users')
+            .update({
+              'is_active': false,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', customerId);
+        
+        print('DEBUG: Customer soft deleted successfully using is_active field');
+      } else {
+        // If no orders, safe to hard delete
+        print('DEBUG: No orders found, performing hard delete');
+        
+        await _client
+            .from('users')
+            .delete()
+            .eq('id', customerId);
+        
+        print('DEBUG: Customer hard deleted successfully');
+      }
+    } catch (e) {
+      print('ERROR: Failed to delete customer: $e');
+      rethrow;
+    }
+  }
+
+  /// Restore soft-deleted farmer
+  static Future<void> restoreFarmer(String farmerId) async {
+    try {
+      await _client
+          .from('users')
+          .update({
+            'is_active': true,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', farmerId);
+      
+      // Optionally restore their products
+      await _client
+          .from('products')
+          .update({'status': 'inactive'}) // Set to inactive instead of active for review
+          .eq('farmer_id', farmerId)
+          .eq('status', 'deleted');
+      
+      print('DEBUG: Farmer restored successfully');
+    } catch (e) {
+      print('ERROR: Failed to restore farmer: $e');
+      rethrow;
+    }
+  }
+
+  /// Restore soft-deleted customer
+  static Future<void> restoreCustomer(String customerId) async {
+    try {
+      await _client
+          .from('users')
+          .update({
+            'is_active': true,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', customerId);
+      
+      print('DEBUG: Customer restored successfully');
+    } catch (e) {
+      print('ERROR: Failed to restore customer: $e');
       rethrow;
     }
   }

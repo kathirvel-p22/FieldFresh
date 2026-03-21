@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../../core/constants.dart';
 import '../../services/supabase_service.dart';
+import '../../services/auth_service.dart';
 import 'farmers_list_screen.dart';
 import 'customers_list_screen.dart';
 import 'all_orders_screen.dart';
-import 'all_products_screen.dart';
+import 'products_management_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -36,6 +37,78 @@ class _AdminDashboardState extends State<AdminDashboard> {
     }
   }
 
+  void _showLogoutConfirmation(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('🚪 Sign Out'),
+        content: const Text(
+          'Are you sure you want to sign out of your admin account?\n\n'
+          'You\'ll need to login again to access the admin dashboard.'
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              
+              // Show logout progress
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => const AlertDialog(
+                  content: Row(
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(width: 16),
+                      Text('Signing out...'),
+                    ],
+                  ),
+                ),
+              );
+              
+              try {
+                final authService = Provider.of<AuthService>(context, listen: false);
+                await authService.logout(context: context);
+                
+                // Close loading dialog
+                if (mounted) Navigator.pop(context);
+                
+                // Show success message
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('✅ Signed out successfully'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                }
+              } catch (e) {
+                // Close loading dialog
+                if (mounted) Navigator.pop(context);
+                
+                // Show error message
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('❌ Logout failed: ${e.toString()}'),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Sign Out'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -46,11 +119,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
-              icon: const Icon(Icons.logout),
-              onPressed: () async {
-                await SupabaseService.signOut();
-                if (context.mounted) context.go(AppRoutes.roleSelect);
-              }),
+            icon: const Icon(Icons.logout),
+            onPressed: () => _showLogoutConfirmation(context),
+          ),
         ],
       ),
       body: _loading
@@ -188,13 +259,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                         builder: (_) =>
                                             const AllOrdersScreen()));
                               }),
-                              _AdminAction('All Products', Icons.inventory_2,
+                              _AdminAction('Products Management', Icons.inventory_2,
                                   AppColors.info, () {
                                 Navigator.push(
                                     context,
                                     MaterialPageRoute(
                                         builder: (_) =>
-                                            const AllProductsScreen()));
+                                            const ProductsManagementScreen()));
                               }),
                               _AdminAction('Analytics', Icons.analytics,
                                   AppColors.accent, () {}),

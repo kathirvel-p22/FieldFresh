@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants.dart';
 import '../../../models/order_model.dart';
 import '../../../services/supabase_service.dart';
+import '../../../services/progressive_disclosure_service.dart';
 
 class CustomerOrdersScreen extends StatefulWidget {
   const CustomerOrdersScreen({super.key});
@@ -377,54 +378,138 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
                         ],
                       ),
                       const SizedBox(height: 8),
-                      // Farmer details
+                      // Farmer details with progressive disclosure
                       FutureBuilder<Map<String, dynamic>?>(
                         future: _getFarmerDetails(o.farmerId),
                         builder: (context, farmerSnap) {
                           if (farmerSnap.hasData && farmerSnap.data != null) {
-                            final farmer = farmerSnap.data!;
-                            return Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: AppColors.background,
-                                borderRadius: BorderRadius.circular(8),
+                            final rawFarmerData = farmerSnap.data!;
+                            
+                            return FutureBuilder<Map<String, dynamic>>(
+                              future: ProgressiveDisclosureService.filterFarmerInfo(
+                                rawFarmerData, 
+                                o.status,
                               ),
-                              child: Row(
-                                children: [
-                                  const CircleAvatar(
-                                    radius: 16,
-                                    backgroundColor: AppColors.secondary,
-                                    child: Icon(Icons.person, color: Colors.white, size: 16),
+                              builder: (context, filteredSnap) {
+                                if (!filteredSnap.hasData) {
+                                  return Container(
+                                    padding: const EdgeInsets.all(8),
+                                    child: const Center(child: CircularProgressIndicator()),
+                                  );
+                                }
+                                
+                                final filteredFarmerData = filteredSnap.data!;
+                                
+                                return Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.background,
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          '👨‍🌾 ${farmer['name'] ?? 'Farmer'}',
-                                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                                        ),
-                                        if (farmer['phone'] != null)
-                                          Text(
-                                            farmer['phone'],
-                                            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                  child: Column(
+                                    children: [
+                                      Row(
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 16,
+                                            backgroundColor: AppColors.secondary,
+                                            backgroundImage: filteredFarmerData['profile_image'] != null
+                                                ? NetworkImage(filteredFarmerData['profile_image'])
+                                                : null,
+                                            child: filteredFarmerData['profile_image'] == null
+                                                ? const Icon(Icons.person, color: Colors.white, size: 16)
+                                                : null,
                                           ),
-                                      ],
-                                    ),
-                                  ),
-                                  if (farmer['rating'] != null)
-                                    Row(
-                                      children: [
-                                        const Icon(Icons.star, size: 12, color: Colors.amber),
-                                        Text(
-                                          ' ${(farmer['rating'] as num).toStringAsFixed(1)}',
-                                          style: const TextStyle(fontSize: 11),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Text(
+                                                      '👨‍🌾 ${filteredFarmerData['name'] ?? 'Farmer'}',
+                                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                                    ),
+                                                    if (filteredFarmerData['is_verified'] == true) ...[
+                                                      const SizedBox(width: 4),
+                                                      const Icon(
+                                                        Icons.verified,
+                                                        color: AppColors.success,
+                                                        size: 12,
+                                                      ),
+                                                    ],
+                                                  ],
+                                                ),
+                                                // Show phone based on disclosure level
+                                                if (filteredFarmerData['phone'] != null)
+                                                  Text(
+                                                    filteredFarmerData['phone'],
+                                                    style: const TextStyle(
+                                                      fontSize: 11, 
+                                                      color: AppColors.textSecondary,
+                                                    ),
+                                                  ),
+                                                // Show city for partial disclosure
+                                                if (filteredFarmerData['city'] != null && filteredFarmerData['address'] == null)
+                                                  Text(
+                                                    '📍 ${filteredFarmerData['city']}',
+                                                    style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                                  ),
+                                                // Show full address for full disclosure
+                                                if (filteredFarmerData['address'] != null)
+                                                  Text(
+                                                    '📍 ${filteredFarmerData['address']}',
+                                                    style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                                    maxLines: 2,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                          if (filteredFarmerData['rating'] != null)
+                                            Row(
+                                              children: [
+                                                const Icon(Icons.star, size: 12, color: Colors.amber),
+                                                Text(
+                                                  ' ${(filteredFarmerData['rating'] as num).toStringAsFixed(1)}',
+                                                  style: const TextStyle(fontSize: 11),
+                                                ),
+                                              ],
+                                            ),
+                                        ],
+                                      ),
+                                      // Disclosure message
+                                      const SizedBox(height: 4),
+                                      FutureBuilder<String>(
+                                        future: ProgressiveDisclosureService.getCustomerDisclosureMessage(
+                                          o.status, 
+                                          o.farmerId,
                                         ),
-                                      ],
-                                    ),
-                                ],
-                              ),
+                                        builder: (context, messageSnap) {
+                                          if (!messageSnap.hasData) return const SizedBox.shrink();
+                                          
+                                          return Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.info.withValues(alpha: 0.1),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              messageSnap.data!,
+                                              style: const TextStyle(
+                                                fontSize: 10,
+                                                color: AppColors.info,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
                             );
                           }
                           return const SizedBox.shrink();

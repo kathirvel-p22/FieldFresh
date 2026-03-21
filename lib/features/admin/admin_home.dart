@@ -3,7 +3,7 @@ import 'admin_dashboard.dart';
 import 'farmers_list_screen.dart';
 import 'customers_list_screen.dart';
 import 'all_orders_screen.dart';
-import 'all_products_screen.dart';
+import 'products_management_screen.dart';
 import 'platform_transactions_screen.dart';
 
 class AdminHome extends StatefulWidget {
@@ -20,7 +20,7 @@ class _AdminHomeState extends State<AdminHome> {
     const FarmersListScreen(),
     const CustomersListScreen(),
     const AllOrdersScreen(),
-    const AllProductsScreen(),
+    const ProductsManagementScreen(),
     const PlatformTransactionsScreen(),
   ];
 

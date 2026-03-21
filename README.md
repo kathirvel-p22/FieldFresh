@@ -1,37 +1,37 @@
-# 🌾 FreshField - Farm to Table Marketplace v2.4
+# FieldFresh v3.0 - Advanced Enterprise Farm-to-Customer Marketplace
 
-> **Production-Ready Hyperlocal Commerce Platform with Complete Image Upload System**
+**🌾 Direct Farm-to-Customer Marketplace with Advanced Enterprise Features**
 
-Connect farmers directly with customers for fresh produce, dairy, and local goods. Real-time marketplace with smart notifications, location intelligence, and secure payments.
+FieldFresh v3.0 is a comprehensive mobile application that connects farmers directly with customers, featuring advanced enterprise-level security, trust verification, and privacy controls. Built with Flutter and powered by Supabase, it offers real-time updates, secure transactions, and intelligent trust scoring.
 
-## 📱 Quick Download
+## 🚀 Latest Release - v3.0 Enterprise Edition
 
-**[⬇️ Download APK Now (62.9 MB)](https://github.com/kathirvel-p22/FieldFresh/raw/main/build/app/outputs/flutter-apk/app-release.apk)**
+### 📱 Download APK
+- **[Download FieldFresh v3.0 APK](https://github.com/kathirvel-p22/FieldFresh/releases/download/v3.0/app-release.apk)** (Latest)
+- **[Download FieldFresh v2.4 APK](https://github.com/kathirvel-p22/FieldFresh/releases/download/v2.4/app-release.apk)** (Stable)
 
-**Installation Steps**:
-1. Click the download link above
-2. Enable "Unknown Sources" in Android Settings → Security
-3. Install the downloaded APK file
-4. Open FieldFresh and start using!
+### 🆕 What's New in v3.0
 
-**Test Accounts**: Farmer: `9876543211` | Customer: `9876543210` | Admin: Tap logo 5x, code: `admin123`
+#### 🔐 Advanced Session Management
+- **Auto-Login**: Seamless authentication without repeated login prompts
+- **Session Persistence**: 30-day session duration with automatic token rotation
+- **Device Security**: AES-256 encryption for stored credentials
+- **Role-Based Routing**: Automatic redirection to appropriate dashboards
 
----
+#### 🛡️ Multi-Layer Trust System (6 Levels)
+- **Level 1 - Phone Verification**: Mandatory OTP verification
+- **Level 2 - Profile Completion**: Name, photo, and address verification
+- **Level 3 - Farm Verification**: GPS location, farm photos, and crop validation
+- **Level 4 - Admin Verification**: Manual review and approval by administrators
+- **Level 5 - Reputation System**: Ratings, reviews, and order history analysis
+- **Level 6 - Government ID**: Optional government document verification
 
-## 🆕 What's New in v2.4
-
-### 📸 Complete Image Upload System
-- **Problem Solved**: Image uploads were failing with 403 Supabase Storage errors and 401 Cloudinary errors
-- **Root Cause**: Missing Supabase Storage bucket and incorrect RLS policies blocking uploads
-- **Solution**: Implemented complete Supabase Storage system with proper bucket setup and RLS policies
-- **Features**: Profile photos and product images now upload successfully to Supabase Storage
-
-### 🔧 Web Compatibility Fixes
-- **Cross-platform support**: Fixed File vs XFile type mismatches for web compatibility
-- **Image compression**: Web-compatible image compression using XFile for all platforms
-- **Blob URL handling**: Proper handling of web blob URLs for image uploads
-- **Type safety**: Resolved compilation errors with proper type casting
-
+#### 🔒 Enhanced Privacy Controls
+- **Progressive Information Disclosure**: Information unlocked based on payment commitment
+  - **Basic Level**: Name, district, ratings, trust score (No payment)
+  - **Partial Level**: + Phone number, approximate location (Advance payment)
+  - **Full Level**: + Complete farm details, exact location (Order confirmed)
+- **Privacy-First Architecture**: Automatic privacy level transiti
 ### 🗄️ Database Infrastructure Improvements
 - **Storage bucket**: Created `fieldfresh-images` bucket with public access
 - **RLS policies**: Configured proper Row Level Security for authenticated uploads

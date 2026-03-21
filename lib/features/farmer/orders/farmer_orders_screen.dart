@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../core/constants.dart';
 import '../../../models/order_model.dart';
 import '../../../services/supabase_service.dart';
+import '../../../services/progressive_disclosure_service.dart';
+import '../../../utils/localization_helper.dart';
 
 class FarmerOrdersScreen extends StatefulWidget {
   const FarmerOrdersScreen({super.key});
@@ -13,8 +15,30 @@ class _FarmerOrdersScreenState extends State<FarmerOrdersScreen> {
   List<OrderModel> _orders = [];
   bool _loading = true;
   String _selectedStatus = 'all';
+  final Map<String, Map<String, dynamic>> _customerCache = {};
 
   final _statusFilters = ['all', 'pending', 'confirmed', 'packed', 'dispatched', 'delivered'];
+
+  String _getLocalizedStatus(String status) {
+    return LocalizationHelper.getText(context, status);
+  }
+
+  Future<Map<String, dynamic>?> _getCustomerDetails(String customerId) async {
+    if (_customerCache.containsKey(customerId)) {
+      return _customerCache[customerId];
+    }
+    
+    try {
+      final customer = await SupabaseService.getCustomerDetails(customerId);
+      if (customer != null) {
+        _customerCache[customerId] = customer;
+      }
+      return customer;
+    } catch (e) {
+      print('Error loading customer: $e');
+      return null;
+    }
+  }
 
   @override
   void initState() {
@@ -51,49 +75,20 @@ class _FarmerOrdersScreenState extends State<FarmerOrdersScreen> {
       await SupabaseService.updateOrderStatus(orderId, newStatus);
       _loadOrders();
       if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.check_circle, color: AppColors.success),
-                SizedBox(width: 8),
-                Text('Success'),
-              ],
-            ),
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
             content: Text('Order status updated to $newStatus'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-            ],
+            backgroundColor: AppColors.success,
           ),
         );
       }
     } catch (e) {
       print('Error updating order: $e');
       if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.error, color: AppColors.error),
-                SizedBox(width: 8),
-                Text('Error'),
-              ],
-            ),
-            content: Text(
-              'Failed to update order status:\n\n${e.toString()}',
-              style: const TextStyle(fontSize: 14),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-            ],
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update order status: $e'),
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -105,7 +100,7 @@ class _FarmerOrdersScreenState extends State<FarmerOrdersScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Customer Orders'),
+        title: Text(LocalizationHelper.getText(context, 'customerOrders')),
         backgroundColor: AppColors.secondary,
         foregroundColor: Colors.white,
       ),
@@ -129,7 +124,7 @@ class _FarmerOrdersScreenState extends State<FarmerOrdersScreen> {
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: FilterChip(
-                    label: Text('${_capitalize(status)} ($count)'),
+                    label: Text('${_getLocalizedStatus(status)} ($count)'),
                     selected: isSelected,
                     onSelected: (selected) {
                       setState(() => _selectedStatus = status);
@@ -159,14 +154,14 @@ class _FarmerOrdersScreenState extends State<FarmerOrdersScreen> {
                             const SizedBox(height: 12),
                             Text(
                               _selectedStatus == 'all'
-                                  ? 'No orders yet'
-                                  : 'No $_selectedStatus orders',
+                                  ? LocalizationHelper.getText(context, 'noOrdersYet')
+                                  : LocalizationHelper.getTextWithParams(context, 'noStatusOrders', category: _getLocalizedStatus(_selectedStatus)),
                               style: const TextStyle(fontSize: 16),
                             ),
                             const SizedBox(height: 4),
-                            const Text(
-                              'Orders will appear here when customers buy your products',
-                              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                            Text(
+                              LocalizationHelper.getText(context, 'ordersWillAppear'),
+                              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                               textAlign: TextAlign.center,
                             ),
                           ],
@@ -240,7 +235,7 @@ class _FarmerOrdersScreenState extends State<FarmerOrdersScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    order.status.toUpperCase(),
+                    _getLocalizedStatus(order.status).toUpperCase(),
                     style: TextStyle(
                       fontSize: 10,
                       color: statusColor,
@@ -251,220 +246,240 @@ class _FarmerOrdersScreenState extends State<FarmerOrdersScreen> {
               ],
             ),
             const Divider(height: 20),
-            // Customer info
+            
+            // Customer info with progressive disclosure
+            FutureBuilder<Map<String, dynamic>?>(
+              future: _getCustomerDetails(order.customerId),
+              builder: (context, customerSnap) {
+                if (customerSnap.hasData && customerSnap.data != null) {
+                  final rawCustomerData = customerSnap.data!;
+                  
+                  return FutureBuilder<Map<String, dynamic>>(
+                    future: ProgressiveDisclosureService.filterCustomerInfo(
+                      rawCustomerData, 
+                      order.status,
+                    ),
+                    builder: (context, filteredSnap) {
+                      if (!filteredSnap.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      
+                      final filteredCustomerData = filteredSnap.data!;
+                      
+                      return Column(
+                        children: [
+                          Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 20,
+                                backgroundColor: AppColors.primary,
+                                backgroundImage: filteredCustomerData['profile_image'] != null
+                                    ? NetworkImage(filteredCustomerData['profile_image'])
+                                    : null,
+                                child: filteredCustomerData['profile_image'] == null
+                                    ? const Icon(Icons.person, color: Colors.white, size: 20)
+                                    : null,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          filteredCustomerData['name'] ?? 'Customer',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                        if (filteredCustomerData['is_verified'] == true) ...[
+                                          const SizedBox(width: 8),
+                                          const Icon(
+                                            Icons.verified,
+                                            color: AppColors.success,
+                                            size: 14,
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                    if (filteredCustomerData['phone'] != null)
+                                      Text(
+                                        filteredCustomerData['phone'],
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          // Disclosure message
+                          const SizedBox(height: 8),
+                          FutureBuilder<String>(
+                            future: ProgressiveDisclosureService.getFarmerDisclosureMessage(
+                              order.status,
+                              order.customerId,
+                            ),
+                            builder: (context, messageSnap) {
+                              if (!messageSnap.hasData) return const SizedBox.shrink();
+                              
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppColors.info.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.info_outline, size: 12, color: AppColors.info),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      child: Text(
+                                        messageSnap.data!,
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          color: AppColors.info,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                }
+                return Row(
+                  children: [
+                    const CircleAvatar(
+                      radius: 20,
+                      backgroundColor: AppColors.primary,
+                      child: Icon(Icons.person, color: Colors.white, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(LocalizationHelper.getText(context, 'loadingCustomerInfo')),
+                  ],
+                );
+              },
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // Order details
             Row(
               children: [
-                const CircleAvatar(
-                  radius: 20,
-                  backgroundColor: AppColors.primary,
-                  child: Icon(Icons.person, color: Colors.white, size: 20),
-                ),
-                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        order.customerName ?? 'Customer',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
+                        '${LocalizationHelper.getText(context, 'quantity')}: ${order.quantity} ${order.unit}',
+                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                       ),
+                      const SizedBox(height: 2),
                       Text(
-                        order.customerPhone ?? '',
+                        '${LocalizationHelper.getText(context, 'total')}: ₹${order.totalAmount.toStringAsFixed(0)}',
                         style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.success,
                         ),
                       ),
                     ],
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            // Order details
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _InfoChip(Icons.shopping_bag, '${order.quantity} ${order.unit}'),
-                _InfoChip(Icons.currency_rupee, order.totalAmount.toStringAsFixed(0)),
-                _InfoChip(Icons.access_time, _formatDate(order.createdAt)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            // Platform fee and total
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Product Amount:', style: TextStyle(fontSize: 12)),
-                      Text('₹${order.totalAmount.toStringAsFixed(0)}', 
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Platform Fee (5%):', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                      Text('- ₹${(order.totalAmount * 0.05).toStringAsFixed(0)}', 
-                        style: const TextStyle(fontSize: 11, color: AppColors.error)),
-                    ],
-                  ),
-                  const Divider(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('You Receive:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                      Text('₹${(order.totalAmount * 0.95).toStringAsFixed(0)}', 
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.success)),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            if (order.deliveryAddress != null) ...[
-              const SizedBox(height: 12),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.location_on, size: 16, color: AppColors.textSecondary),
+                if (order.deliveryAddress != null) ...[
+                  const Icon(Icons.location_on, size: 14, color: AppColors.textHint),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
                       order.deliveryAddress!,
-                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
-              ),
-            ],
+              ],
+            ),
+            
+            const SizedBox(height: 12),
+            
             // Action buttons
-            if (order.status != 'delivered' && order.status != 'cancelled') ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  if (order.status == 'pending')
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () => _updateOrderStatus(order.id, 'confirmed'),
-                        icon: const Icon(Icons.check_circle, size: 16),
-                        label: const Text('Confirm', style: TextStyle(fontSize: 12)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.success,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                        ),
-                      ),
-                    ),
-                  if (order.status == 'confirmed') ...[
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () => _updateOrderStatus(order.id, 'packed'),
-                        icon: const Icon(Icons.inventory, size: 16),
-                        label: const Text('Mark Packed', style: TextStyle(fontSize: 12)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.info,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                        ),
-                      ),
-                    ),
-                  ],
-                  if (order.status == 'packed') ...[
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () => _updateOrderStatus(order.id, 'dispatched'),
-                        icon: const Icon(Icons.local_shipping, size: 16),
-                        label: const Text('Dispatch', style: TextStyle(fontSize: 12)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.accent,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                        ),
-                      ),
-                    ),
-                  ],
-                  if (order.status == 'dispatched') ...[
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () => _updateOrderStatus(order.id, 'delivered'),
-                        icon: const Icon(Icons.done_all, size: 16),
-                        label: const Text('Mark Delivered', style: TextStyle(fontSize: 12)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.success,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
+            _buildActionButtons(order),
           ],
         ),
       ),
     );
   }
 
+  Widget _buildActionButtons(OrderModel order) {
+    switch (order.status) {
+      case 'pending':
+        return Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => _updateOrderStatus(order.id, 'cancelled'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.error,
+                  side: const BorderSide(color: AppColors.error),
+                ),
+                child: Text(LocalizationHelper.getText(context, 'decline')),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () => _updateOrderStatus(order.id, 'confirmed'),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.success),
+                child: Text(LocalizationHelper.getText(context, 'accept')),
+              ),
+            ),
+          ],
+        );
+      case 'confirmed':
+        return SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: () => _updateOrderStatus(order.id, 'packed'),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.info),
+            child: Text(LocalizationHelper.getText(context, 'markAsPacked')),
+          ),
+        );
+      case 'packed':
+        return SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: () => _updateOrderStatus(order.id, 'dispatched'),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
+            child: Text(LocalizationHelper.getText(context, 'markAsDispatched')),
+          ),
+        );
+      case 'dispatched':
+        return SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: () => _updateOrderStatus(order.id, 'delivered'),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.success),
+            child: Text(LocalizationHelper.getText(context, 'markAsDelivered')),
+          ),
+        );
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
   String _capitalize(String text) {
     if (text.isEmpty) return text;
     return text[0].toUpperCase() + text.substring(1);
-  }
-
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final diff = now.difference(date);
-
-    if (diff.inDays == 0) {
-      if (diff.inHours == 0) {
-        return '${diff.inMinutes}m ago';
-      }
-      return '${diff.inHours}h ago';
-    } else if (diff.inDays == 1) {
-      return 'Yesterday';
-    } else if (diff.inDays < 7) {
-      return '${diff.inDays}d ago';
-    } else {
-      return '${date.day}/${date.month}/${date.year}';
-    }
-  }
-}
-
-class _InfoChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-
-  const _InfoChip(this.icon, this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: AppColors.textSecondary),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
